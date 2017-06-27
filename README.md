@@ -1,21 +1,21 @@
 # music
 
-Look into:
-1. Fourier Transformation
-2. Fast Fourier Transformation
-3. Prepare database
+## Look into:
+1. Prepare database
   * Extract audio from Youtube
-4. Find chords
-  * 
-5. Find beats (Optional)
-  * Comb filter
+1. Find chords
+  * Use Librosa to extract chromagram
+1. UI Design
+1. UI Implementation
+
+## Possible extension:
+1. Transcribe sheet music
 
 **TODO**:
 * Read [THIS PAPER](http://dreixel.net/research/pdf/fmmh.pdf) by Sunday June 25th
 * Learn about [CHORDS](http://www.musictheory.net/lessons/40)
 
 # Musical Harmony Notes
-
 ## Keywords:
 * **Tonic chord**: Triad built on the first scale degree (ex. C-E-G)
 * **Scale degree**: Position of a particular note on a scale (tonic, supertonic, mediant, subdominant, dominant, submediant, leading tone). Represents the relative interval between a tone and its tonic.
