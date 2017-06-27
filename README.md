@@ -1,10 +1,8 @@
 # music
 
 ## Look into:
-1. Prepare database
-  * Extract audio from Youtube
-1. Find chords
-  * Use Librosa to extract chromagram
+1. Extract audio from Youtube
+1. Use Librosa to extract chromagram
 1. UI Design
 1. UI Implementation
 
