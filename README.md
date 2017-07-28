@@ -27,3 +27,9 @@
 Subdominant prepares a dominant by building up tension, dominant induces maximal tension, tonic releases the tension.
 
 Deep connection between music and math pushed for music theorists to develop ways to analyze the function of a chord in its tonal context.
+
+# Required Packages
+
+* librosa
+* google-api-python-client
+* pytube
