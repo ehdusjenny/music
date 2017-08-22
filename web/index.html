@@ -62,10 +62,17 @@ g.append("g")
     .call(d3.axisLeft(y));
     
 function addPoint() {
+    // See https://bost.ocks.org/mike/path/
+    
     var lastX = points[points.length-1][0]
     points.push([lastX+100,Math.random()*100]);
     pathData = lineGenerator(points);
     path.attr('d', pathData);
+    
+    x.domain(d3.extent(points, function(d) { return d[0]; }))
+        .range(d3.extent(points, function(d) { return d[0]; }));
+    y.domain([0,100])
+        .range([0,100]);
 }
 
 </script>
