@@ -17,12 +17,6 @@
 * Input Youtube URL
 * Display Chromagram moving along with the music as it is playing
 
-**Installation Instructions**:
-```
-wget https://johnvansickle.com/ffmpeg/builds/ffmpeg-git-64bit-static.tar.xz
-tar xvf ffmpeg-git-*.tar.xz
-```
-
 # Musical Harmony Notes
 ## Keywords:
 * **Tonic chord**: Triad built on the first scale degree (ex. C-E-G)
