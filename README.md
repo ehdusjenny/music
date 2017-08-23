@@ -13,6 +13,10 @@
 * Read [THIS PAPER](http://dreixel.net/research/pdf/fmmh.pdf) by Sunday June 25th
 * Learn about [CHORDS](http://www.musictheory.net/lessons/40)
 
+**Basic Functionality**:
+* Input Youtube URL
+* Display Chromagram moving along with the music as it is playing
+
 # Musical Harmony Notes
 ## Keywords:
 * **Tonic chord**: Triad built on the first scale degree (ex. C-E-G)
