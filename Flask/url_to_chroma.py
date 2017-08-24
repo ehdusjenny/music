@@ -9,5 +9,17 @@ def hello():
     #print(request.form['foo'])
     return "Hello World!"
 
-if __name__ = "__main__":
+@app.route("/hello")
+def hello2():
+    return "Moo"
+
+@app.route("/hello/<name>")
+def hello3(name):
+    return "Hello %s!" % name
+
+@app.route("/dl/<vid_id>")
+def download(vid_id):
+    extract_audio.download_yt_video("https://www.youtube.com/watch?v=%s" % vid_id)
+
+if __name__ == "__main__":
     app.run(host="0.0.0.0", port="5000")

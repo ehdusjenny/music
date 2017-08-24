@@ -37,3 +37,4 @@ Deep connection between music and math pushed for music theorists to develop way
 * librosa
 * google-api-python-client
 * pytube
+* matplotlib
