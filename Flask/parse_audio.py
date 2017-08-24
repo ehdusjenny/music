@@ -7,38 +7,13 @@ import librosa.display
 
 import numpy as np
 
-#audio_path = librosa.util.example_audio_file()
-#audio_path = 'middle-C HD.mp3'
-#audio_path = 'C chord.mp3'
-#audio_path = 'C major scale.mp3'
-#audio_path = '/mnt/teaching/bach.mp3'
-#print("Audio path: %s" % audio_path)
-#y, sr = librosa.load(audio_path)
-
-#y_harmonic, y_percussive = librosa.effects.hpss(y)
-
-#C = librosa.feature.chroma_cqt(y=y_harmonic, sr=sr, n_octaves=3, n_chroma=36)
-#C = librosa.feature.chroma_cqt(y=y_harmonic, sr=sr)
-
-# Make a new figure
-#plt.figure(figsize=(12,8))
-
-# Display the chromagram: the energy in each chromatic pitch class as a
-# function of time
-# To make sure that the colors span the full range of chroma values, set vmin
-# and vmax
-# librosa.display.specshow(C, sr=sr, x_axis='time', y_axis='chroma', vmin=0, vmax=1)
-
-#plt.title('Chromagram')
-#plt.colorbar()
-#plt.tight_layout()
-#plt.savefig('chromagram.png')
-
-#chords = {'major': [0,4,7],
-#        'minor': [0,3,7],
-#        'augmented': [0,4,8],
-#        'diminished': [0,3,6],
-#        'major7': [0,4,7,11]}
+def compute_chroma(audio_path):
+    y, sr = librosa.load(audio_path)
+    y_harmonic, y_percussive = librosa.effects.hpss(y)
+    
+    C = librosa.feature.chroma_cqt(y=y_harmonic, sr=sr)
+    
+    return C,sr
 
 def list_notes(chroma):
     chroma = np.copy(chroma)
@@ -60,7 +35,7 @@ def list_notes(chroma):
     n = [notes[i] for i in order]
     print(n)
 
-def find_key(chroma, audio_path):
+def find_key(chroma):
     length = chroma.shape[1]
     note_frequency = [0]*12
     for i in range(length):
@@ -81,15 +56,11 @@ if __name__ == "__main__":
     args = argparser.parse_args()
     audio_path = args.path
 
-    y, sr = librosa.load(audio_path)
-    y_harmonic, y_percussive = librosa.effects.hpss(y)
-    
-    C = librosa.feature.chroma_cqt(y=y_harmonic, sr=sr)
+    chroma, sample_rate = compute_chroma(audio_path)
 
-    librosa.display.specshow(C, sr=sr, x_axis='time', y_axis='chroma', vmin=0, vmax=1)
-
+    # Plot graph
+    librosa.display.specshow(chroma, sr=sample_rate, x_axis='time', y_axis='chroma', vmin=0, vmax=1)
     plt.figure(figsize=(12,8))
-
     plt.title('Chromagram')
     plt.colorbar()
     plt.tight_layout()
@@ -101,5 +72,4 @@ if __name__ == "__main__":
               'diminished': [0,3,6],
               'major7': [0,4,7,11]}
 
-
-    find_key(C, audio_path)
+    find_key(C)

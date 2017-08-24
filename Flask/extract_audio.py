@@ -40,6 +40,7 @@ def download_yt_video(url):
     command = "ffmpeg -i \"%s\" -ab 160k -ac 2 -ar 44100 -vn \"%s\"" % (mp4_output, mp3_output)
     print(command)
     subprocess.call(command, shell=True)
+    return mp3_output
 
 if __name__ == "__main__":
     argparser.add_argument("--url", help="URL to YouTube video")
