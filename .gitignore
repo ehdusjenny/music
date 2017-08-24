@@ -1,0 +1,4 @@
+env
+Flask/mp3/**
+Flask/mp4/**
+**/*.pyc
