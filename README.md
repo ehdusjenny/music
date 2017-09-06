@@ -10,8 +10,7 @@
 1. Transcribe sheet music
 
 **TODO**:
-* Read [THIS PAPER](http://dreixel.net/research/pdf/fmmh.pdf) by Sunday June 25th
-* Learn about [CHORDS](http://www.musictheory.net/lessons/40)
+* Dockerize the application
 
 **Basic Functionality**:
 * Input Youtube URL
