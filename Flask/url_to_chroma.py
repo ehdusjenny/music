@@ -23,7 +23,7 @@ def hello3(name):
 
 @app.route("/dl/<vid_id>")
 def download(vid_id):
-    file_name = extract_audio.download_yt_video("https://www.youtube.com/watch?v=%s" % vid_id)
+    file_name = extract_audio.download_by_id(vid_id)
     chroma, sample_rate = parse_audio.compute_chroma(file_name)
     return json.dumps(chroma.tolist())
 
@@ -81,4 +81,4 @@ def dummy():
             0.16518418503492052]])
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port="5000")
+    app.run(host="0.0.0.0", port="5000", threaded=True)

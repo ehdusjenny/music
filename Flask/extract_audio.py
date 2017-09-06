@@ -42,6 +42,40 @@ def download_yt_video(url):
     subprocess.call(command, shell=True)
     return mp3_output
 
+def download_by_id(vid_id):
+    """
+    Download a YouTube video given the video's ID, and return the path to the
+    video. If the video has already been downloaded, then return the path to
+    that file without redownloading.
+    """
+    if not os.path.isdir(MP4_DIR):
+        os.mkdir(MP4_DIR)
+    if not os.path.isdir(MP3_DIR):
+        os.mkdir(MP3_DIR)
+
+    url = "https://www.youtube.com/watch?v=%s" % vid_id
+    yt = YouTube(url)
+    yt.filename = vid_id
+
+    # Check if the mp3 already exists
+    mp3_output = os.path.join(MP3_DIR, yt.filename + ".mp3")
+    if os.path.exists(mp3_output):
+        return mp3_output
+
+    # Download full video
+    mp4_output = os.path.join(MP4_DIR, yt.filename + ".mp4")
+    if not os.path.exists(mp4_output):
+        vid = yt.filter('mp4')[-1]
+        vid.download(MP4_DIR)
+
+    # Extract audio from video
+    mp3_output = os.path.join(MP3_DIR, vid_id + ".mp3")
+    if not os.path.exists(mp3_output):
+        command = "ffmpeg -i \"%s\" -ab 160k -ac 2 -ar 44100 -vn \"%s\"" % (mp4_output, mp3_output)
+        subprocess.call(command, shell=True)
+
+    return mp3_output
+
 if __name__ == "__main__":
     argparser.add_argument("--url", help="URL to YouTube video")
     args = argparser.parse_args()
