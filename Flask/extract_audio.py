@@ -26,6 +26,7 @@ def download_yt_video(url):
         os.mkdir(MP3_DIR)
 
     yt = YouTube(url)
+    yt.filename = ''.join([i if ord(i) < 128 else '' for i in yt.filename])
 
     mp4_output = os.path.join(MP4_DIR, yt.filename + ".mp4")
     if os.path.exists(mp4_output):
@@ -37,7 +38,7 @@ def download_yt_video(url):
     mp3_output = os.path.join(MP3_DIR, yt.filename + ".mp3")
     if os.path.exists(mp3_output):
         os.remove(mp3_output)
-    command = "./ffmpeg -i \"%s\" -ab 160k -ac 2 -ar 44100 -vn \"%s\"" % (mp4_output, mp3_output)
+    command = "ffmpeg -i \"%s\" -ab 160k -ac 2 -ar 44100 -vn \"%s\"" % (mp4_output, mp3_output)
     print(command)
     subprocess.call(command, shell=True)
     return mp3_output

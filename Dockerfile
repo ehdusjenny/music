@@ -1,12 +1,17 @@
-FROM python:3.6.2
+FROM ubuntu:17.10
 WORKDIR /app
 ADD . /app
-RUN wget https://johnvansickle.com/ffmpeg/builds/ffmpeg-git-64bit-static.tar.xz
-RUN tar xvf ffmpeg-git-*.tar.xz
-RUN mv /app/ffmpeg-git-20170904-64bit-static/ffmpeg /app/Flask
-RUN rm -rf /app/ffmpeg-git-*
-RUN pip install numpy
-RUN pip install flask librosa google-api-python-client pytube matplotlib
-RUN echo 'alias ffmpeg="/app/Flask/ffmpeg"' >> ~/.bashrc
+RUN apt-get update && apt-get install -y \
+	python3-pip \
+	python3-numpy \
+	ffmpeg \
+	xz-utils \
+	python3.6
+RUN pip3 install -U \
+	flask \
+	librosa \
+	google-api-python-client \
+	pytube \
+	matplotlib
 EXPOSE 5000
-CMD ["python", "/app/Flask/url_to_chroma.py"]
+CMD ["python3.6", "/app/Flask/url_to_chroma.py"]
