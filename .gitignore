@@ -1,3 +1,4 @@
+*.mp3
 env
 Flask/mp3/**
 Flask/mp4/**
