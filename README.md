@@ -1,5 +1,13 @@
 # music
 
+## Instructions:
+Install Docker
+```
+docker build -t music .
+docker run -p 5000:5000 music
+```
+localhost:5000
+
 ## Look into:
 1. Extract audio from Youtube
 1. Use Librosa to extract chromagram
@@ -8,9 +16,6 @@
 
 ## Possible extension:
 1. Transcribe sheet music
-
-**TODO**:
-* Dockerize the application
 
 **Basic Functionality**:
 * Input Youtube URL
