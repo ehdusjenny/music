@@ -42,7 +42,9 @@ class SoundWave extends Component {
 	fetchData() {
 		var that = this;
 		//fetch("http://localhost:5000/dummydata")
-		fetch("http://localhost:5000/dl/FM7MFYoylVs")
+		var hostname = window.location.hostname;
+		var url = "http://"+hostname+":5000/dl/FM7MFYoylVs"
+		fetch(url)
 			.then(function(response){
 				window.x = response;
 				return response.json();
@@ -68,7 +70,6 @@ class SoundWave extends Component {
 	}
 	drawGraph() {
 		var data = this.getData()[0];
-		console.log(data);
 		var node = this.refs.svg;
 		var svg = d3.select(node);
 		svg.selectAll("*").remove();
@@ -88,7 +89,9 @@ class SoundWave extends Component {
 		var lineGenerator = d3.line();
 		var pathData = lineGenerator(scaledPoints);
 		var path = g.append('path');
-		path.attr('d', pathData);
+		path.attr('d', pathData)
+			.attr('fill', 'none')
+			.attr('stroke', '#000');
 	}
 	componentDidMount() {
 		this.drawGraph();
