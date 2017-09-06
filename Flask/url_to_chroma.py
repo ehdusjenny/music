@@ -24,7 +24,14 @@ def hello3(name):
 @app.route("/dl/<vid_id>")
 def download(vid_id):
     file_name = extract_audio.download_by_id(vid_id)
+    audio = parse_audio.get_audio(file_name)
+    return json.dumps(audio[:1000].tolist())
+
+@app.route("/chroma/<vid_id>")
+def chroma(vid_id):
+    file_name = extract_audio.download_by_id(vid_id)
     chroma, sample_rate = parse_audio.compute_chroma(file_name)
+    print(chroma.shape)
     return json.dumps(chroma.tolist())
 
 @app.route("/dummydata")

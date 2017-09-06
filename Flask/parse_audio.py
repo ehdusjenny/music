@@ -7,6 +7,10 @@ import librosa.display
 
 import numpy as np
 
+def get_audio(audio_path):
+    y, _ = librosa.load(audio_path)
+    return y
+
 def compute_chroma(audio_path):
     y, sr = librosa.load(audio_path)
     y_harmonic, y_percussive = librosa.effects.hpss(y)

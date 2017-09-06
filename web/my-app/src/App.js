@@ -17,7 +17,7 @@ class App extends Component {
           To get started, edit <code>src/App.js</code> and save to reload.
         </p>
 				<SearchBar/>
-				<SoundWave/>
+				<ChromaGraph/>
       </div>
     );
   }
@@ -50,7 +50,6 @@ class SoundWave extends Component {
 				return response.json();
 			}).then(function(data){
 				that.setState({data: data});
-				console.log(data);
 			}).catch(function(error) {
 				  console.log('There has been a problem with your fetch operation: ' + error.message);
 			});
@@ -63,13 +62,13 @@ class SoundWave extends Component {
 		for (var i = 0; i < 100; i++) {
 			x.push(Math.random());
 		}
-		return [x];
+		return x;
 	}
 	render() {
 		return (<svg width='500' height='200' ref='svg'></svg>);
 	}
 	drawGraph() {
-		var data = this.getData()[0];
+		var data = this.getData();
 		var node = this.refs.svg;
 		var svg = d3.select(node);
 		svg.selectAll("*").remove();
@@ -92,6 +91,83 @@ class SoundWave extends Component {
 		path.attr('d', pathData)
 			.attr('fill', 'none')
 			.attr('stroke', '#000');
+	}
+	componentDidMount() {
+		this.drawGraph();
+	}
+	componentDidUpdate() {
+		this.drawGraph();
+	}
+}
+
+class ChromaGraph extends Component {
+	constructor(props) {
+		super(props);
+		this.state = {
+			data: null
+		};
+		this.fetchData();
+	}
+	fetchData() {
+		var that = this;
+		var hostname = window.location.hostname;
+		var url = "http://"+hostname+":5000/chroma/FM7MFYoylVs"
+		fetch(url)
+			.then(function(response){
+				window.x = response;
+				return response.json();
+			}).then(function(data){
+				that.setState({data: data});
+			}).catch(function(error) {
+				  console.log('There has been a problem with your fetch operation: ' + error.message);
+			});
+	}
+	getData() {
+		if (this.state.data != null) {
+			return this.state.data;
+		}
+		var x = [];
+		for (var j = 0; j < 12; j++) {
+			var y = []
+			for (var i = 0; i < 100; i++) {
+				y.push(Math.random());
+			}
+			x.push(y);
+		}
+		return x;
+	}
+	render() {
+		return (<svg width='700' height='200' ref='svg'></svg>);
+	}
+	drawGraph() {
+		var data = this.getData();
+		var node = this.refs.svg;
+		var svg = d3.select(node);
+		svg.selectAll("*").remove();
+		var g = svg.append("g");
+
+		var svgRect = svg.node().getBoundingClientRect();
+		var xScale = d3.scale.scaleLinear()
+			.domain([0, data.length])
+			.range([0,svgRect.width]);
+		var yScale = d3.scale.scaleLinear()
+			.domain([0,1])
+			.range([0,svgRect.height/12.5]);
+		var scaledPoints = data.map(function(d) {
+					return d.map(function(p, i) {
+						return [xScale(i), yScale(p)];
+					});
+				});
+		var lineGenerator = d3.line();
+		var dist = svgRect.height/12.0;
+		scaledPoints.forEach(function(sp,i) {
+			var pathData = lineGenerator(sp);
+			var path = g.append('path');
+			path.attr('d', pathData)
+				.attr('fill', 'none')
+				.attr('stroke', '#000')
+				.attr('transform', 'translate(0,'+(dist*i)+')');
+		});
 	}
 	componentDidMount() {
 		this.drawGraph();
