@@ -14,6 +14,7 @@ localhost:5000
 1. UI Design
 1. UI Implementation
 1. Create a training set of notes with added noise
+  * Using [pretty_midi](https://github.com/craffel/pretty-midi) library, create random synthesized notes (varying velocity, instrument, notes)
 
 ## Basic Functionality:
 * Input Youtube URL
