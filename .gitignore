@@ -2,6 +2,8 @@
 env
 Flask/mp3/**
 Flask/mp4/**
+Flask/labels.p
+Flask/features.p
 **/*.pyc
 **/*.swp
 .idea/
