@@ -9,9 +9,12 @@ RUN apt-get update && apt-get install -y \
 	python3.6
 RUN pip3 install -U \
 	flask \
+	flask_cors \
 	librosa \
 	google-api-python-client \
 	pytube \
-	matplotlib
+	matplotlib \
+	pyfluidsynth \
+	fluidsynth
 EXPOSE 5000
 CMD ["python3.6", "/app/Flask/url_to_chroma.py"]
