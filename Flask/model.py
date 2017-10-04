@@ -1,7 +1,9 @@
-from keras.models import Sequential
+from keras.models import Sequential, load_model
 from keras.layers import Dense, Activation, LSTM
 
-def get_model():
+def get_model(file_name):
+    if os.path.isfile(file_name):
+        return load_model(file_name)
     model = Sequential()
     model.add(Dense(12, input_shape=(12,)))
     model.add(Activation('relu'))
