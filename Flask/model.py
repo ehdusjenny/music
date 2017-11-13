@@ -1,18 +1,16 @@
-from keras.models import Sequential, load_model
-from keras.layers import Dense, Activation, LSTM
+import os
+import torch
+from torch.autograd import Variable
+import torch.nn as nn
+import torch.nn.functional as F
 
-def get_model(file_name):
-    if os.path.isfile(file_name):
-        return load_model(file_name)
-    model = Sequential()
-    model.add(Dense(12, input_shape=(12,)))
-    model.add(Activation('relu'))
-    model.add(Dense(12))
-    model.add(Activation('softmax'))
-    return model
+class Net(nn.Module):
+    def __init__(self):
+        super(Net, self).__init__()
+        self.fc1 = nn.Linear(2000, 1000)
+        self.fc2 = nn.Linear(1000, 128)
 
-def get_lstm_model(): #???
-    model = Sequential()
-    model.add(LSTM(32, input_shape=(1,), return_sequences=True))
-    model.add(LSTM(12))
-    return model
+    def forward(self, x):
+        x = F.relu(self.fc1(x))
+        x = F.sigmoid(self.fc2(x))
+        return x
