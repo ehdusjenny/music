@@ -55,21 +55,26 @@ def get_data_from_file(file_name):
 def to_midi(file_name, model):
     import pretty_midi
     import scipy.io.wavfile
+
     print("Loading data")
     x_np = get_data_from_file(file_name)
+
     print("Creating Variable")
     x_var = Variable(torch.from_numpy(x_np), requires_grad=False)
+
     print("Converting to piano roll")
     output = np.array([model(x).data.numpy() for x in tqdm(x_var)])
     output = output > 0.7
+
     print("Nearest neighbour")
-    k = 1 # This doesn't seem to work for any other value of k
+    k = 5
     output_conv = np.zeros(output.shape)
     for i in range(-int(np.floor(k/2)),int(np.ceil(k/2))):
-        output_conv += np.roll(output,i)
+        output_conv += np.roll(output,i,0)
     output_conv *= 1/k
     output_conv = (output_conv >= 0.5) + 0
     output = output_conv
+
     print("Generating midi")
     def get_length(o,t,n):
         i = 0
@@ -95,15 +100,18 @@ def to_midi(file_name, model):
                         end=(t+output2[t][note_number])*1998/44100/2)
                 instrument.notes.append(note)
     music.instruments.append(instrument)
+
     print("Synthesizing")
     #audio_data = music.synthesize(fs=44100)
+
     print("Saving audio")
     #scipy.io.wavfile.write("f2.wav",44100, audio_data)
     music.write('f.mid')
+
     return output,output2
 
 def train(model, optimizer):
-    inputs, outputs = get_data(100)
+    inputs, outputs = get_data(10)
 
     if torch.cuda.is_available():
         inputs = inputs.cuda()
@@ -217,6 +225,7 @@ if __name__ == "__main__":
         net.cuda()
     if args.train:
         for i in range(args.epochs):
+            print("Epoch %d:" % i)
             logging.info("Training")
             train(net, optimizer)
             logging.info("Testing")
@@ -224,7 +233,7 @@ if __name__ == "__main__":
             print("Score: %f" % score)
             logging.info("Saving model")
             if args.save_every_epoch:
-                torch.save(net.state_dict(), model_file_name+"."+i)
+                torch.save(net.state_dict(), "%s.%s"%(model_file_name,i))
             else:
                 torch.save(net.state_dict(), model_file_name)
     elif args.test:
