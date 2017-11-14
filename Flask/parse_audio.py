@@ -52,6 +52,12 @@ def find_key(chroma):
     print(tmp)
     return note_frequency
 
+def to_midi(audio_path):
+    y, sr = librosa.load(audio_path)
+    y_harmonic, y_percussive = librosa.effects.hpss(y)
+
+    d = librosa.core.stft(y_harmonic,n_fft=2000-2)
+
 if __name__ == "__main__":
     argparser.add_argument("--path", help="relative path to the audio file")
     args = argparser.parse_args()
