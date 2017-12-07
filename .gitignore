@@ -7,3 +7,5 @@ Flask/features.p
 **/*.pyc
 **/*.swp
 .idea/
+web/my-app/node_modules
+web/my-app/package-lock.json

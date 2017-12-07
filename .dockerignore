@@ -1,3 +1,5 @@
 .idea/
 Flask/mp3/**
 Flask/mp4/**
+web/my-app/node_modules
+web/my-app/package-lock.json

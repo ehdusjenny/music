@@ -52,6 +52,7 @@ def get_data_from_file(file_name):
     x = np.vstack([np.abs(d),np.angle(d)])
     return x.transpose()
 
+
 def to_midi(file_name, model):
     import pretty_midi
     import scipy.io.wavfile

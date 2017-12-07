@@ -5,8 +5,8 @@ RUN apt-get update && apt-get install -y \
 	python3-pip \
 	python3-numpy \
 	ffmpeg \
-	xz-utils \
-	python3.6
+	python3.6 \
+	xz-utils
 RUN pip3 install -U \
 	flask \
 	flask_cors \
