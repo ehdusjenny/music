@@ -68,7 +68,7 @@ def to_midi(file_name, model):
     output = output > 0.7
 
     print("Nearest neighbour")
-    k = 5
+    k = 1
     output_conv = np.zeros(output.shape)
     for i in range(-int(np.floor(k/2)),int(np.ceil(k/2))):
         output_conv += np.roll(output,i,0)

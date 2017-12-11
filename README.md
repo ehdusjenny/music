@@ -46,3 +46,8 @@ localhost:5000
 * Given the music's key, we can determine the most likely chords.
   * Hooktheory has an API which gives probabilities for each chord sequence. Their dataset seems to be mainly composed of western music, so we'd have to find a way of doing this for music from other cultures. This can start off as a simple markovian transition model.
 * Combine the chord probabilities based on the previous chord and the sound waves.
+
+# Datasets
+
+* [Nsynth](https://magenta.tensorflow.org/datasets/nsynth)
+* [https://www.audiocontentanalysis.org/data-sets/](https://www.audiocontentanalysis.org/data-sets/)
