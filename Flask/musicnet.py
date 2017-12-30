@@ -40,6 +40,18 @@ class Net(torch.nn.Module):
         x = self.fc2(x)
         return x
 
+class ConvNet(torch.nn.Module):
+    def __init__(self):
+        super(ConvNet, self).__init__()
+        self.conv = torch.nn.Conv1d(1,500,2048,stride=8)
+        self.pool = torch.nn.AvgPool1d(16,stride=8)
+        self.fc = torch.nn.Linear(223*500,128)
+    def forward(self, x):
+        x = self.conv(x)
+        x = self.pool(x)
+        x = self.fc(x.view(-1))
+        return x
+
 def load_data(file_name):
     train_data = dict(np.load(open(file_name,'rb'),encoding='latin1'))
 
@@ -50,13 +62,15 @@ def load_data(file_name):
 
     return train_data, test_data
 
-def split_input_output(data, input_dims=2048, sampling_rate=44100, random=False):
+def split_input_output(data, input_dims=2048, sampling_rate=44100, stride=512, random=False):
+    # TODO: Does not currently work for different stride lengths
+    # TODO: Compute the number of data points using data['2382'][0].shape[0]
     features = 0    # first element of (X,Y) data tuple
     labels = 1      # second element of (X,Y) data tuple
 
     ids = list(data.keys())
     if random:
-        x = np.empty([len(data),d])
+        x = np.empty([len(data),input_dims])
         y = np.zeros([len(data),m])
         for i in range(len(ids)):
             # Pick a random spot in the audio track
@@ -67,15 +81,15 @@ def split_input_output(data, input_dims=2048, sampling_rate=44100, random=False)
             for label in data[ids[i]][labels][s]:
                 y[i,label.data[1]] = 1
     else:
-        x = np.empty([len(data)*7500,d])
+        x = np.empty([len(data)*7500,input_dims])
         y = np.zeros([len(data)*7500,m])
         for i in range(len(ids)):
             for j in range(7500):
-                index = sampling_rate+j*512 # start from one second to give us some wiggle room for larger segments
-                x[7500*i + j] = data[ids[i]][features][index:index+d]
+                index = sampling_rate+j*stride # start from one second to give us some wiggle room for larger segments
+                x[7500*i + j] = data[ids[i]][features][index:index+input_dims]
                 
                 # label stuff that's on in the center of the window
-                for label in data[ids[i]][labels][index+d/2]:
+                for label in data[ids[i]][labels][index+input_dims/2]:
                     y[7500*i + j,label.data[1]] = 1
 
     x = Variable(torch.from_numpy(x).float(), requires_grad=False)
@@ -167,3 +181,4 @@ else:
     torch.save(net, "mlp.pkl")
 
 plot_weights(net)
+
