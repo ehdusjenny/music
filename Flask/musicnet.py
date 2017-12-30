@@ -168,17 +168,68 @@ def predict_labels(net, file_name, window_size=2048, hop_length=512):
     x = np.array([data[(hop_length*i):(hop_length*i+window_size)] for i in range(n)])
     return net(Variable(torch.from_numpy(x), requires_grad=False))
 
+def make_midi(labels, sample_rate, hop_length):
+    """
+    labels - A 2D np.array of booleans with indices [time][note_number]
+    """
+    import pretty_midi
+
+    def get_length(l,t,n):
+        i = 0
+        while t+i < l.shape[0]:
+            if l[t+i][n]:
+                l[t+i][n] = False
+                i+=1
+                continue
+            else:
+                return i
+
+    labels2 = np.zeros(labels.shape)
+    for t in tqdm(range(labels.shape[0])):
+        for note_number in range(128):
+            if labels[t][note_number]:
+                labels2[t][note_number] = get_length(labels,t,note_number)
+
+    music = pretty_midi.PrettyMIDI()
+    instrument = pretty_midi.Instrument(program=41)
+    for t in tqdm(range(labels2.shape[0])):
+        for note_number in range(128):
+            if labels2[t][note_number] > 0:
+                note = pretty_midi.Note(velocity=100, pitch=note_number,
+                        start=t*1998/44100/2,
+                        end=(t+labels2[t][note_number])*1998/44100/2)
+                instrument.notes.append(note)
+    music.instruments.append(instrument)
+
+    return music
+
 d = 2048        # input dimensions
 m = 128         # number of notes
 k = 500         # number of hidden units
 
-if os.path.isfile("mlp.pkl"):
-    net = torch.load("mlp.pkl")
+if os.path.isfile("mlp2.pkl"):
+    net = torch.load("mlp2.pkl")
 else:
     train_data, test_data = load_data('/NOBACKUP/hhuang63/musicnet/musicnet.npz')
     net = Net(d,k,m)
     train(net, train_data, test_data)
     torch.save(net, "mlp.pkl")
 
-plot_weights(net)
+#plot_weights(net)
 
+print("Labelling")
+labels = predict_labels(net, "bach.mp3")
+labels = labels.data.numpy()
+print("Making MIDI")
+midi = make_midi(labels, 44100, 512)
+print("Saving file")
+midi.write('f.mid')
+
+#import dill
+##train_data, test_data = load_data('/NOBACKUP/hhuang63/musicnet/musicnet.npz')
+#x,y = dill.load(open("test-16384-small-np.pkl", "rb"))
+#x = Variable(torch.from_numpy(x))
+#y = Variable(torch.from_numpy(y))
+#print("Done Loading")
+#cn = ConvNet()
+#print(cn(x[0].view(1,1,-1)))
