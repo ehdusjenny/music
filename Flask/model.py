@@ -1,3 +1,7 @@
+"""
+    ML model to be trained using generated data from data.py in train.py
+"""
+
 import os
 import torch
 from torch.autograd import Variable

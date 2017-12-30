@@ -1,3 +1,7 @@
+"""
+    Downloads YouTube videos and saves the audio as mp3 files in /mp3.
+"""
+
 import os
 from apiclient.discovery import build
 from apiclient.errors import HttpError

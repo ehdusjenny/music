@@ -1,3 +1,7 @@
+"""
+    Generated audio data from data.py used to train NN model from model.py
+"""
+
 import logging
 import os
 import numpy as np

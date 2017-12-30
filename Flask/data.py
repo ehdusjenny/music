@@ -1,3 +1,7 @@
+"""
+    Generated audio to be used as a training dataset for train.py
+"""
+
 import numpy as np
 import pretty_midi
 import pickle

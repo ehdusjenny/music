@@ -1,5 +1,11 @@
-import extract_audio
-import parse_audio
+"""
+    REST API for music computation, given YouTube video ID:
+        Chromagram
+    Computed values will be saved in a folder named after the video ID under computed_data/
+"""
+
+import Flask.extract_audio
+import Flask.parse_audio
 from flask import Flask, request
 from flask_cors import CORS
 import base64
@@ -7,25 +13,19 @@ import json
 app = Flask(__name__)
 CORS(app)
 
-#@app.route("/", methods=['POST'])
 @app.route("/")
 def hello():
-    #print(request.form['foo'])
     return "Hello World!"
 
-@app.route("/hello")
-def hello2():
-    return json.dumps([[1,2,3],[4,5,6]])
-
-@app.route("/hello/<name>")
-def hello3(name):
-    return "Hello %s!" % name
-
-@app.route("/dl/<vid_id>")
-def download(vid_id):
-    file_name = extract_audio.download_by_id(vid_id)
-    chroma, sample_rate = parse_audio.compute_chroma(file_name)
+@app.route("/chroma/<vid_id>")
+def generate_chroma(vid_id):
+    file_name = Flask.extract_audio.download_by_id(vid_id)
+    chroma, sample_rate = Flask.parse_audio.compute_chroma(file_name)
     return json.dumps(chroma.tolist())
+
+@app.route("/midi/<vid_id>")
+def generate_midi(vid_id):
+    return "hello"
 
 @app.route("/dummydata")
 def dummy():
