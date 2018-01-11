@@ -22,7 +22,7 @@ from sklearn.metrics import average_precision_score
 #%matplotlib inline
 class Net2(torch.nn.Module):
     def __init__(self, d,k,m):
-        super(Net, self).__init__()
+        super(Net2, self).__init__()
         self.fc1 = torch.nn.Linear(d,k)
         self.fc2 = torch.nn.Linear(k,m)
     def forward(self, x):
@@ -32,7 +32,7 @@ class Net2(torch.nn.Module):
 
 class Net(torch.nn.Module):
     def __init__(self, d,k,m):
-        super(Net2, self).__init__()
+        super(Net, self).__init__()
         self.fc1 = torch.nn.Linear(d,k)
         self.fc2 = torch.nn.Linear(k,m)
     def forward(self, x):
@@ -41,7 +41,7 @@ class Net(torch.nn.Module):
         return x
 
 class ConvNet(torch.nn.Module):
-    def __init__(self):
+    def __init__(self, window_size):
         super(ConvNet, self).__init__()
         self.conv = torch.nn.Conv1d(1,500,2048,stride=8)
         self.pool = torch.nn.AvgPool1d(16,stride=8)
@@ -49,7 +49,7 @@ class ConvNet(torch.nn.Module):
     def forward(self, x):
         x = self.conv(x)
         x = self.pool(x)
-        x = self.fc(x.view(-1))
+        x = self.fc(x.view(-1,223*500))
         return x
 
 def load_data(file_name):
@@ -71,7 +71,7 @@ def split_input_output(data, input_dims=2048, sampling_rate=44100, stride=512, r
     ids = list(data.keys())
     if random:
         x = np.empty([len(data),input_dims])
-        y = np.zeros([len(data),m])
+        y = np.zeros([len(data),128])
         for i in range(len(ids)):
             # Pick a random spot in the audio track
             s = np.random.randint(
@@ -82,7 +82,7 @@ def split_input_output(data, input_dims=2048, sampling_rate=44100, stride=512, r
                 y[i,label.data[1]] = 1
     else:
         x = np.empty([len(data)*7500,input_dims])
-        y = np.zeros([len(data)*7500,m])
+        y = np.zeros([len(data)*7500,128])
         for i in range(len(ids)):
             for j in range(7500):
                 index = sampling_rate+j*stride # start from one second to give us some wiggle room for larger segments
@@ -93,15 +93,15 @@ def split_input_output(data, input_dims=2048, sampling_rate=44100, stride=512, r
                     y[7500*i + j,label.data[1]] = 1
 
     x = Variable(torch.from_numpy(x).float(), requires_grad=False)
-    y = Variable(torch.from_numpy(y).long(), requires_grad=False)
+    y = Variable(torch.from_numpy(y).float(), requires_grad=False)
 
     return x,y
 
-def train(net, train_data, test_data):
-    Xtest, Ytest = split_input_output(test_data, input_dims=d, random=False)
+def train(net, train_data, test_data, window_size=2048):
+    global Xtest, Ytest
+    Xtest, Ytest = split_input_output(test_data, input_dims=window_size, random=False)
 
-    #criterion = torch.nn.MSELoss()
-    criterion = torch.nn.MultiLabelMarginLoss()
+    criterion = torch.nn.MSELoss()
 
     square_error = []
     average_precision = []
@@ -129,6 +129,48 @@ def train(net, train_data, test_data):
                 start = time()
         
         Xmb, Ymb = split_input_output(train_data, input_dims=d, random=True)
+        loss = criterion(net(Xmb), Ymb)
+        loss.backward()
+        opt.step()
+
+def traincn(net, train_data, test_data, window_size=2048):
+    global Xtest, Ytest
+    Xtest, Ytest = split_input_output(test_data, input_dims=window_size, random=False)
+    Xtest.cuda()
+    Ytest.cuda()
+    Xtest = Xtest.view(-1,1,window_size) #
+
+    criterion = torch.nn.MSELoss()
+
+    square_error = []
+    average_precision = []
+
+    lr = .0001
+    opt = torch.optim.SGD(net.parameters(), lr=lr)
+    np.random.seed(999)
+    start = time()
+    print('iter\tsquare_loss\tavg_precision\ttime')
+    for i in tqdm(range(250000)):
+        if i % 1000 == 0 and (i != 0 or len(square_error) == 0):
+            Yhattestbase = net(Xtest)
+            loss = criterion(Yhattestbase, Ytest)
+            square_error.append(loss.data[0])
+            
+            yflat = Ytest.view(-1)
+            yhatflat = Yhattestbase.view(-1)
+            average_precision.append(average_precision_score(yflat.data.numpy(), yhatflat.data.numpy()))
+            
+            if i % 10000 == 0:
+                end = time()
+                print(i,'\t', round(square_error[-1],8),\
+                        '\t', round(average_precision[-1],8),\
+                        '\t', round(end-start,8))
+                start = time()
+        
+        Xmb, Ymb = split_input_output(train_data, input_dims=window_size, random=True)
+        Xmb.cuda()
+        Ymb.cuda()
+        Xmb = Xmb.view(-1,1,window_size) #
         loss = criterion(net(Xmb), Ymb)
         loss.backward()
         opt.step()
@@ -168,6 +210,12 @@ def predict_labels(net, file_name, window_size=2048, hop_length=512):
     x = np.array([data[(hop_length*i):(hop_length*i+window_size)] for i in range(n)])
     return net(Variable(torch.from_numpy(x), requires_grad=False))
 
+def boolify(data):
+    def f(x):
+        return 1 if x > 0.3 else 0
+    f = np.vectorize(f)
+    return f(data)
+
 def make_midi(labels, sample_rate, hop_length):
     """
     labels - A 2D np.array of booleans with indices [time][note_number]
@@ -203,23 +251,32 @@ def make_midi(labels, sample_rate, hop_length):
 
     return music
 
-d = 2048        # input dimensions
-m = 128         # number of notes
-k = 500         # number of hidden units
+#d = 2048        # input dimensions
+#m = 128         # number of notes
+#k = 500         # number of hidden units
 
-if os.path.isfile("mlp2.pkl"):
-    net = torch.load("mlp2.pkl")
+#if os.path.isfile("mlp2.pkl"):
+#    net = torch.load("mlp2.pkl")
+#else:
+#    train_data, test_data = load_data('/NOBACKUP/hhuang63/musicnet/musicnet.npz')
+#    net = Net2(d,k,m)
+#    train(net, train_data, test_data)
+#    torch.save(net, "mlp2.pkl")
+
+if os.path.isfile("mlp.conv.pkl"):
+    net = torch.load("mlp.conv.pkl")
 else:
     train_data, test_data = load_data('/NOBACKUP/hhuang63/musicnet/musicnet.npz')
-    net = Net(d,k,m)
-    train(net, train_data, test_data)
-    torch.save(net, "mlp.pkl")
+    net = ConvNet(16384).cuda()
+    traincn(net, train_data, test_data, window_size=16384)
+    torch.save(net, "mlp.conv.pkl")
 
 #plot_weights(net)
 
 print("Labelling")
 labels = predict_labels(net, "bach.mp3")
 labels = labels.data.numpy()
+labels = boolify(labels)
 print("Making MIDI")
 midi = make_midi(labels, 44100, 512)
 print("Saving file")
@@ -231,5 +288,6 @@ midi.write('f.mid')
 #x = Variable(torch.from_numpy(x))
 #y = Variable(torch.from_numpy(y))
 #print("Done Loading")
-#cn = ConvNet()
+#cn = ConvNet(16384)
 #print(cn(x[0].view(1,1,-1)))
+#print(cn(x[:2].view(-1,1,16384)))
