@@ -23,12 +23,6 @@ localhost:5000
 ## Possible extension:
 1. Transcribe sheet music
 
-# Required Packages
-* librosa
-* google-api-python-client
-* pytube
-* matplotlib
-
 # Approach
 
 * Train a classifier which can determine which notes are played.
