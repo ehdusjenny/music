@@ -1,11 +1,15 @@
 *.mp3
 env
+ENV
 Flask/mp3/**
 Flask/mp4/**
 Flask/labels.p
 Flask/features.p
 **/*.pyc
 **/*.swp
+**/*.swo
 .idea/
 web/my-app/node_modules
 web/my-app/package-lock.json
+data
+output
