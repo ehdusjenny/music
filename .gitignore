@@ -11,5 +11,4 @@ Flask/features.p
 .idea/
 web/my-app/node_modules
 web/my-app/package-lock.json
-data
 output
