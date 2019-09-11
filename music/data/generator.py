@@ -7,69 +7,128 @@ import librosa
 from random import randint
 from tqdm import tqdm
 
+import torch
+
 DEFAULT_SAMPLING_RATE = 44100
 DEFAULT_SAMPLE_LENGTH = 44100
 chords_to_num = {"C":0, "C#":1, "D":2, "D#":3, "E":4, "F":5, "F#":6, "G":7,
         "G#":8, "A":9, "A#":10, "B":11}
 
-def generate_tone(note_number, program_number, sample_length, sampling_rate):
-    label = np.zeros(12)
-    note_name_octave = pretty_midi.note_number_to_name(note_number)
-    note_name = note_name_octave[:-1]
-    note_name_clean = note_name.replace("-", "")
-    chord_index = chords_to_num[note_name_clean]
-    label[chord_index] = 1
+class GeneratedDataset(torch.utils.data.Dataset):
+    def __init__(self,max_tones=5,min_tones=0,transforms=None):
+        self.transforms = transforms
 
-    velocity = 100
+        all_notes = itertools.product(*[[True,False]]*12)
+        def filter_func(x):
+            s = sum(x)
+            return s <= max_tones and s >= min_tones
+        filtered_notes = filter(filter_func,all_notes)
+        self.notes = list(filtered_notes)
 
-    chord = pretty_midi.PrettyMIDI()
-    instrument = pretty_midi.Instrument(program=program_number)
-    note = pretty_midi.Note(velocity=velocity, pitch=note_number, start=0, end=1)
-    instrument.notes.append(note)
-    chord.instruments.append(instrument)
-    audio_data = chord.synthesize(fs=sampling_rate)
+    def __getitem__(self,index):
+        output = {'notes': self.notes[index]}
+        if self.transforms is not None:
+            return self.transforms(output)
+        return output
 
-    return (audio_data[:sample_length], label)
+    def __len__(self):
+        return len(self.notes)
 
-def generate_chord(note_numbers, program_number, sample_length, sampling_rate):
-    label = np.zeros(12)
-    label = [n in note_numbers for n in range(128)]
+class ToNoteNumber(object):
+    def __init__(self, starting_octave=3, num_octaves=1):
+        assert starting_octave >= -1 and starting_octave <= 9
+        assert num_octaves >= 1 and num_octaves <= 11
 
-    velocity = 100
+        lowest_note = (starting_octave+1)*12
+        highest_note = min((starting_octave+1+num_octaves)*12,128)
 
-    chord = pretty_midi.PrettyMIDI()
-    instrument = pretty_midi.Instrument(program=program_number)
-    for note_number in note_numbers:
-        note = pretty_midi.Note(velocity=velocity, pitch=note_number, start=0, end=1)
-        instrument.notes.append(note)
-    chord.instruments.append(instrument)
-    audio_data = chord.synthesize(fs=sampling_rate)
+        # Generate notes between [lowest_note,highest_note)
+        self.notes = [[] for _ in range(12)]
+        for n in range(lowest_note,highest_note):
+            self.notes[n%12].append(n)
 
-    return (audio_data[:sample_length], label)
+    def __call__(self, sample):
+        notes = sample['notes']
+        note_numbers = []
+        for i,n in enumerate(notes):
+            if n:
+                note_numbers.append(np.random.choice(self.notes[i]))
+        return {'notes': notes, 'note_numbers': note_numbers}
 
-def random_clips(n, num_notes=3, sample_length=DEFAULT_SAMPLE_LENGTH,
-        sampling_rate=DEFAULT_SAMPLING_RATE):
-    for i in itertools.count():
-        if i >= n:
-            break
-        note_number = np.random.choice(range(24,119), [num_notes]).tolist()
-        # Programs that don't work: 0,9,12,34
-        program_number = np.random.choice(range(1,112))
-        yield generate_chord(note_number, program_number, sample_length, sampling_rate)
+class SynthesizeSounds(object):
+    def __init__(self, program_numbers=list(range(1,112)), velocity=100,
+            sample_length=DEFAULT_SAMPLE_LENGTH,
+            sampling_rate=DEFAULT_SAMPLING_RATE):
+        assert len(program_numbers) > 0
+        self.program_numbers = program_numbers
+        self.velocity = velocity
+        self.sampling_rate = sampling_rate
+        self.sample_length = sample_length
 
-def white_noise(n, sample_length=DEFAULT_SAMPLE_LENGTH):
-    for i in itertools.count():
-        if i >= n:
-            break
-        yield np.random.rand(sample_length)
+    def __call__(self, sample):
+        note_numbers = sample['note_numbers']
+
+        program_number = np.random.choice(self.program_numbers)
+
+        chord = pretty_midi.PrettyMIDI()
+        instrument = pretty_midi.Instrument(program=program_number)
+        for note_number in note_numbers:
+            note = pretty_midi.Note(velocity=self.velocity, pitch=note_number, start=0, end=1)
+            instrument.notes.append(note)
+        chord.instruments.append(instrument)
+        audio_data = chord.synthesize(fs=self.sampling_rate)
+
+        output = sample.copy()
+        output['audio'] = audio_data
+        return output
+
+class WhiteNoise(object):
+    def __init__(self):
+        pass
+
+    def __call__(self, sample):
+        audio_data = sample['input']
+
+        # TODO
+
+        output = sample.copy()
+        output['input'] = audio_data
+        return output
+
+class Compose(object):
+    """Copied from torchvision.transforms.Compose"""
+
+    def __init__(self, transforms):
+        self.transforms = transforms
+
+    def __call__(self, img):
+        for t in self.transforms:
+            img = t(img)
+        return img
+
+    def __repr__(self):
+        format_string = self.__class__.__name__ + '('
+        for t in self.transforms:
+            format_string += '\n'
+            format_string += '    {0}'.format(t)
+        format_string += '\n)'
+        return format_string
 
 if __name__=="__main__":
+    transforms = Compose([
+        ToNoteNumber(),
+        SynthesizeSounds()
+    ])
+    dataset = GeneratedDataset(transforms=transforms)
+    print(dataset[0])
+
     import scipy.io.wavfile
-    noise = list(white_noise(1))[0]
-    clip = list(random_clips(1))[0]
-    scipy.io.wavfile.write("f.wav",44100, clip[0])
-    print("Computing stft")
-    d = librosa.core.stft(clip[0],n_fft=2000-2)
-    mag = np.abs(d)
-    ang = np.angle(d)
-    x = np.vstack([mag,ang])
+    #noise = list(white_noise(1))[0]
+    #clip = list(random_clips(1))[0]
+    scipy.io.wavfile.write("f.wav",44100, dataset[0]['audio'])
+    #print("Computing stft")
+    #d = librosa.core.stft(clip[0],n_fft=2000-2)
+    #mag = np.abs(d)
+    #ang = np.angle(d)
+    #x = np.vstack([mag,ang])
+
