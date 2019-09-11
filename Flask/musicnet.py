@@ -20,25 +20,6 @@ from sklearn.metrics import precision_recall_curve
 from sklearn.metrics import average_precision_score
 
 #%matplotlib inline
-class Net2(torch.nn.Module):
-    def __init__(self, d,k,m):
-        super(Net2, self).__init__()
-        self.fc1 = torch.nn.Linear(d,k)
-        self.fc2 = torch.nn.Linear(k,m)
-    def forward(self, x):
-        x = torch.log(1+F.relu(self.fc1(x)))
-        x = self.fc2(x)
-        return x
-
-class Net(torch.nn.Module):
-    def __init__(self, d,k,m):
-        super(Net, self).__init__()
-        self.fc1 = torch.nn.Linear(d,k)
-        self.fc2 = torch.nn.Linear(k,m)
-    def forward(self, x):
-        x = F.relu(self.fc1(x))
-        x = self.fc2(x)
-        return x
 
 class ConvNet(torch.nn.Module):
     def __init__(self, window_size):
@@ -51,87 +32,6 @@ class ConvNet(torch.nn.Module):
         x = self.pool(x)
         x = self.fc(x.view(-1,223*500))
         return x
-
-def load_data(file_name):
-    train_data = dict(np.load(open(file_name,'rb'),encoding='latin1'))
-
-    # split our the test set
-    test_data = dict()
-    for id in (2303,2382,1819): # test set
-        test_data[str(id)] = train_data.pop(str(id))
-
-    return train_data, test_data
-
-def split_input_output(data, input_dims=2048, sampling_rate=44100, stride=512, random=False):
-    # TODO: Does not currently work for different stride lengths
-    # TODO: Compute the number of data points using data['2382'][0].shape[0]
-    features = 0    # first element of (X,Y) data tuple
-    labels = 1      # second element of (X,Y) data tuple
-
-    ids = list(data.keys())
-    if random:
-        x = np.empty([len(data),input_dims])
-        y = np.zeros([len(data),128])
-        for i in range(len(ids)):
-            # Pick a random spot in the audio track
-            s = np.random.randint(
-                    input_dims/2,
-                    len(data[ids[i]][features])-input_dims/2)
-            x[i] = data[ids[i]][features][int(s-input_dims/2):int(s+input_dims/2)]
-            for label in data[ids[i]][labels][s]:
-                y[i,label.data[1]] = 1
-    else:
-        x = np.empty([len(data)*7500,input_dims])
-        y = np.zeros([len(data)*7500,128])
-        for i in range(len(ids)):
-            for j in range(7500):
-                index = sampling_rate+j*stride # start from one second to give us some wiggle room for larger segments
-                x[7500*i + j] = data[ids[i]][features][index:index+input_dims]
-                
-                # label stuff that's on in the center of the window
-                for label in data[ids[i]][labels][index+input_dims/2]:
-                    y[7500*i + j,label.data[1]] = 1
-
-    x = Variable(torch.from_numpy(x).float(), requires_grad=False)
-    y = Variable(torch.from_numpy(y).float(), requires_grad=False)
-
-    return x,y
-
-def train(net, train_data, test_data, window_size=2048):
-    global Xtest, Ytest
-    Xtest, Ytest = split_input_output(test_data, input_dims=window_size, random=False)
-
-    criterion = torch.nn.MSELoss()
-
-    square_error = []
-    average_precision = []
-
-    lr = .0001
-    opt = torch.optim.SGD(net.parameters(), lr=lr)
-    np.random.seed(999)
-    start = time()
-    print('iter\tsquare_loss\tavg_precision\ttime')
-    for i in tqdm(range(250000)):
-        if i % 1000 == 0 and (i != 0 or len(square_error) == 0):
-            loss = criterion(net(Xtest), Ytest)
-            square_error.append(loss.data[0])
-            
-            Yhattestbase = net(Xtest)
-            yflat = Ytest.view(-1)
-            yhatflat = Yhattestbase.view(-1)
-            average_precision.append(average_precision_score(yflat.data.numpy(), yhatflat.data.numpy()))
-            
-            if i % 10000 == 0:
-                end = time()
-                print(i,'\t', round(square_error[-1],8),\
-                        '\t', round(average_precision[-1],8),\
-                        '\t', round(end-start,8))
-                start = time()
-        
-        Xmb, Ymb = split_input_output(train_data, input_dims=d, random=True)
-        loss = criterion(net(Xmb), Ymb)
-        loss.backward()
-        opt.step()
 
 def traincn(net, train_data, test_data, window_size=2048):
     global Xtest, Ytest
