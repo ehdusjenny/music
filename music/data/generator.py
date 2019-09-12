@@ -8,6 +8,7 @@ from random import randint
 from tqdm import tqdm
 
 import torch
+import torchaudio
 
 DEFAULT_SAMPLING_RATE = 44100
 DEFAULT_SAMPLE_LENGTH = 44100
@@ -79,7 +80,7 @@ class SynthesizeSounds(object):
         audio_data = chord.synthesize(fs=self.sampling_rate)
 
         output = sample.copy()
-        output['audio'] = audio_data
+        output['audio'] = audio_data[:-self.sampling_rate] # Last second is empty
         return output
 
 class WhiteNoise(object):
@@ -93,6 +94,30 @@ class WhiteNoise(object):
 
         output = sample.copy()
         output['input'] = audio_data
+        return output
+
+class ToTensor(object):
+    def __init__(self):
+        pass
+
+    def __call__(self, sample):
+        notes = sample['notes']
+        note_numbers = sample['note_numbers']
+        audio_data = sample['audio']
+
+        output = sample.copy()
+        output['audio'] = torch.tensor(audio_data)
+        return output
+
+class Spectrogram(object):
+    def __init__(self, *args, **kwargs):
+        self.transform = torchaudio.transforms.Spectrogram(*args,**kwargs)
+
+    def __call__(self, sample):
+        audio_data = sample['audio']
+
+        output = sample.copy()
+        output['spectrogram'] = self.transform(audio_data.unsqueeze(0).float())
         return output
 
 class Compose(object):
@@ -117,18 +142,13 @@ class Compose(object):
 if __name__=="__main__":
     transforms = Compose([
         ToNoteNumber(),
-        SynthesizeSounds()
+        SynthesizeSounds(),
+        ToTensor(),
+        Spectrogram()
     ])
     dataset = GeneratedDataset(transforms=transforms)
-    print(dataset[0])
+    print(dataset[-2]['audio'].shape)
 
     import scipy.io.wavfile
-    #noise = list(white_noise(1))[0]
-    #clip = list(random_clips(1))[0]
-    scipy.io.wavfile.write("f.wav",44100, dataset[0]['audio'])
-    #print("Computing stft")
-    #d = librosa.core.stft(clip[0],n_fft=2000-2)
-    #mag = np.abs(d)
-    #ang = np.angle(d)
-    #x = np.vstack([mag,ang])
+    scipy.io.wavfile.write("f.wav",44100, dataset[0]['audio'].numpy())
 
