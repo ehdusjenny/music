@@ -69,18 +69,21 @@ class SynthesizeSounds(object):
     def __call__(self, sample):
         note_numbers = sample['note_numbers']
 
-        program_number = np.random.choice(self.program_numbers)
+        if len(note_numbers) == 0:
+            audio_data = np.array([0]*self.sample_length)
+        else:
+            program_number = np.random.choice(self.program_numbers)
 
-        chord = pretty_midi.PrettyMIDI()
-        instrument = pretty_midi.Instrument(program=program_number)
-        for note_number in note_numbers:
-            note = pretty_midi.Note(velocity=self.velocity, pitch=note_number, start=0, end=1)
-            instrument.notes.append(note)
-        chord.instruments.append(instrument)
-        audio_data = chord.synthesize(fs=self.sampling_rate)
+            chord = pretty_midi.PrettyMIDI()
+            instrument = pretty_midi.Instrument(program=program_number)
+            for note_number in note_numbers:
+                note = pretty_midi.Note(velocity=self.velocity, pitch=note_number, start=0, end=1)
+                instrument.notes.append(note)
+            chord.instruments.append(instrument)
+            audio_data = chord.synthesize(fs=self.sampling_rate)
 
         output = sample.copy()
-        output['audio'] = audio_data[:-self.sampling_rate] # Last second is empty
+        output['audio'] = audio_data[:self.sample_length] # Last second is empty
         return output
 
 class WhiteNoise(object):
@@ -116,8 +119,11 @@ class Spectrogram(object):
     def __call__(self, sample):
         audio_data = sample['audio']
 
+        spectrogram = self.transform(audio_data.unsqueeze(0).float())
+        centre_spectrum = spectrogram[:,:,int(spectrogram.shape[2]/2)] # (channel, freq, time)
+
         output = sample.copy()
-        output['spectrogram'] = self.transform(audio_data.unsqueeze(0).float())
+        output['spectrogram'] = centre_spectrum
         return output
 
 class Compose(object):
@@ -147,7 +153,7 @@ if __name__=="__main__":
         Spectrogram()
     ])
     dataset = GeneratedDataset(transforms=transforms)
-    print(dataset[-2]['audio'].shape)
+    print(dataset[-1]['spectrogram'].shape)
 
     import scipy.io.wavfile
     scipy.io.wavfile.write("f.wav",44100, dataset[0]['audio'].numpy())
