@@ -13,39 +13,11 @@ def get_data_from_file(file_name):
     x = np.vstack([np.abs(d),np.angle(d)])
     return x.transpose()
 
-def get_data(n, c=None):
-    data_x_wav = []
-    data_y = []
-    for num_notes in range(1,10):
-        # Generate data set
-        for x,y in data.generator.random_clips(n, num_notes=num_notes):
-            data_x_wav.append(x)
-            data_y.append(y)
-        # Generate chromagrams
-        inputs = []
-        outputs = []
-        for wav,y in zip(data_x_wav,data_y):
-            d = librosa.core.stft(wav,n_fft=2000-2)
-            xs = np.vstack([np.abs(d),np.angle(d)])
-            if c is None:
-                for i in range(xs.shape[1]):
-                    inputs.append(xs[:,i])
-                    outputs.append(y)
-            else:
-                for i in np.random.choice(range(xs.shape[1]), c):
-                    inputs.append(xs[:,i])
-                    outputs.append(y)
-
-    inputs = torch.from_numpy(np.array(inputs)).float()
-    outputs = torch.from_numpy(np.array(outputs).astype(float)).float()
-
-    return inputs, outputs
-
 class SimpleMLP(torch.nn.Module):
     def __init__(self):
-        super(Net, self).__init__()
-        self.fc1 = nn.Linear(2000, 1000)
-        self.fc2 = nn.Linear(1000, 128)
+        super().__init__()
+        self.fc1 = torch.nn.Linear(2000, 1000)
+        self.fc2 = torch.nn.Linear(1000, 128)
     def forward(self, x):
         x = F.relu(self.fc1(x))
         x = F.sigmoid(self.fc2(x))

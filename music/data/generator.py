@@ -145,6 +145,32 @@ class Compose(object):
         format_string += '\n)'
         return format_string
 
+class NoteNumbersToVector(object):
+    def __init__(self):
+        pass
+
+    def __call__(self, sample):
+        note_numbers = sample['note_numbers']
+        assert type(note_numbers) is list
+
+        vector = torch.zeros([128])
+        for n in note_numbers:
+            vector[n] = 1
+
+        output = sample.copy()
+        output['note_numbers'] = vector
+        return output
+
+class Filter(object):
+    def __init__(self, keys=[]):
+        self.keys = keys
+
+    def __call__(self, sample):
+        output = {}
+        for k in self.keys:
+            output[k] = sample[k]
+        return output
+
 if __name__=="__main__":
     transforms = Compose([
         ToNoteNumber(),
