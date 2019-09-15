@@ -1,8 +1,11 @@
+import os
+import copy
 import torch
 from tqdm import tqdm
 
 import data
 import data.generator
+import data.musicnet
 
 class Net(torch.nn.Module):
     def __init__(self, structure=[201,200,128]):
@@ -16,8 +19,8 @@ class Net(torch.nn.Module):
     def forward(self,x):
         return self.seq(x).squeeze()
 
-if __name__=="__main__":
-    transforms = data.generator.Compose([
+def get_datasets():
+    generated_transforms = data.generator.Compose([
         data.generator.ToNoteNumber(),
         data.generator.SynthesizeSounds(),
         data.generator.NoteNumbersToVector(),
@@ -25,24 +28,85 @@ if __name__=="__main__":
         data.generator.Spectrogram(),
         data.generator.Filter(['note_numbers','spectrogram'])
     ])
-    dataset = data.generator.GeneratedDataset(transforms=transforms)
+    generated_dataset = data.generator.GeneratedDataset(transforms=generated_transforms)
+    musicnet_transforms = data.generator.Compose([
+        data.musicnet.IntervalsToNoteNumbers(),
+        data.generator.NoteNumbersToVector(),
+        data.generator.ToTensor(),
+        data.generator.Spectrogram(),
+        data.generator.Filter(['note_numbers','spectrogram'])
+    ])
+    musicnet_train_dataset = data.musicnet.MusicNetDataset(
+            '/mnt/ppl-3/musicnet/musicnet',transforms=musicnet_transforms,
+            train=True,points_per_song=1)
+    musicnet_test_dataset = data.musicnet.MusicNetDataset(
+            '/mnt/ppl-3/musicnet/musicnet',transforms=musicnet_transforms,
+            train=False,points_per_song=100)
+    return musicnet_train_dataset, musicnet_test_dataset
+
+def save_checkpoint(file_name, model, optim):
+    checkpoint = {
+            'model': model.state_dict(),
+            'optim': optim.state_dict()
+    }
+    torch.save(checkpoint,file_name)
+
+def load_checkpoint(file_name, model, optim):
+    try:
+        checkpoint = torch.load(file_name)
+        model.load_state_dict(checkpoint['model'])
+        optim.load_state_dict(checkpoint['optim'])
+    except FileNotFoundError:
+        print('Checkpoint not found. Skipping.')
+
+if __name__=="__main__":
+    output_dir = ''
+    best_model_file_name = os.path.join(output_dir,'best_model.pkl')
+    checkpoint_file_name = os.path.join(output_dir,'checkpoint.pkl')
+
+    train_dataset, val_dataset = get_datasets()
+
     net = Net()
     optimizer = torch.optim.Adam(net.parameters(), lr=0.01)
-    dataloader = torch.utils.data.DataLoader(dataset=dataset, batch_size=32,
-            shuffle=True)
+    load_checkpoint(checkpoint_file_name,net,optimizer)
+
+    train_dataloader = torch.utils.data.DataLoader(
+            dataset=train_dataset, batch_size=32, shuffle=True)
+    val_dataloader = torch.utils.data.DataLoader(
+            dataset=val_dataset, batch_size=32, shuffle=True)
+
+    best_model = copy.deepcopy(net)
+    best_loss = float('inf')
 
     criterion = torch.nn.BCELoss(reduction='sum')
-    for _ in range(10):
-        total_loss = 0
-        for d in tqdm(dataloader):
+    for _ in range(100):
+        total_train_loss = 0
+        for d in tqdm(train_dataloader,desc='Training'):
             x = d['spectrogram']
             y = d['note_numbers']
             est = net(d['spectrogram'])
             loss = criterion(est,y)
-            total_loss += loss.item()
+            total_train_loss += loss.item()
 
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-        total_loss /= len(dataloader)
-        print('Loss: %f' % (total_loss))
+        total_train_loss /= len(train_dataloader)
+
+        total_val_loss = 0
+        for d in tqdm(val_dataloader,desc='Validation'):
+            x = d['spectrogram']
+            y = d['note_numbers']
+            est = net(d['spectrogram'])
+            loss = criterion(est,y)
+            total_val_loss += loss.item()
+        total_val_loss /= len(val_dataloader)
+
+        if total_val_loss < best_loss:
+            print('New best model saved.')
+            best_model = copy.deepcopy(net)
+            best_loss = total_val_loss
+
+        print('Train Loss: %f \t Val Loss: %f' % 
+                (total_train_loss,total_val_loss))
+        save_checkpoint(checkpoint_file_name,net,optimizer)

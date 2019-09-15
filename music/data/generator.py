@@ -104,8 +104,6 @@ class ToTensor(object):
         pass
 
     def __call__(self, sample):
-        notes = sample['notes']
-        note_numbers = sample['note_numbers']
         audio_data = sample['audio']
 
         output = sample.copy()
@@ -179,8 +177,8 @@ if __name__=="__main__":
         Spectrogram()
     ])
     dataset = GeneratedDataset(transforms=transforms)
-    print(dataset[-1]['spectrogram'].shape)
+    d = dataset[int(len(dataset)/2)]
+    print(d['spectrogram'].shape)
 
     import scipy.io.wavfile
-    scipy.io.wavfile.write("f.wav",44100, dataset[0]['audio'].numpy())
-
+    scipy.io.wavfile.write("f.wav",44100, d['audio'].numpy())
