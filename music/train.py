@@ -1,7 +1,10 @@
 import os
 import copy
-import torch
 from tqdm import tqdm
+import scipy.io.wavfile
+import torch
+import torchaudio
+import pretty_midi
 
 import data
 import data.generator
@@ -59,6 +62,50 @@ def load_checkpoint(file_name, model, optim):
     except FileNotFoundError:
         print('Checkpoint not found. Skipping.')
 
+def to_midi(net,wav_file_name,n_fft=400,win_length=None,hop_length=None,
+        threshold=0.7):
+    win_length = win_length if win_length is not None else n_fft
+    hop_length = hop_length if hop_length is not None else win_length // 2
+
+    # Compute Note Prediction
+    rate,data = scipy.io.wavfile.read(wav_file_name)
+    transform = torchaudio.transforms.Spectrogram(n_fft=n_fft,
+            win_length=win_length, hop_length = hop_length)
+    spectrogram = transform(
+            torch.tensor(data).view(1,-1)) # (channel, freq, time)
+    spectrogram = spectrogram.permute(2,0,1).squeeze() # (time, freq)
+    prediction = net(spectrogram) > threshold
+
+    # Create MIDI
+    midi = pretty_midi.PrettyMIDI()
+    cello_program = pretty_midi.instrument_name_to_program('Cello')
+    instrument = pretty_midi.Instrument(program=cello_program)
+
+    # Convert prediction to MIDI
+    notes = [None]*128
+    for t in tqdm(range(prediction.shape[0]), desc='Converting to MIDI'):
+        for n in range(128):
+            if prediction[t,n]:
+                if notes[n] is None:
+                    notes[n] = (t,t+1)
+                else:
+                    start,end = notes[n]
+                    notes[n] = (start,end+1)
+            else:
+                if notes[n] is None:
+                    continue
+                else:
+                    start,end = notes[n]
+                    start = (win_length/2+start*hop_length)/rate
+                    end = (win_length/2+end*hop_length)/rate
+                    notes[n] = None
+                    #tqdm.write('Note %d played from %f to %f.' % (n,start,end))
+                    note = pretty_midi.Note(velocity=100, pitch=n,
+                            start=start, end=end)
+                    instrument.notes.append(note)
+    midi.instruments.append(instrument)
+    return midi
+
 if __name__=="__main__":
     output_dir = ''
     best_model_file_name = os.path.join(output_dir,'best_model.pkl')
@@ -79,7 +126,7 @@ if __name__=="__main__":
     best_loss = float('inf')
 
     criterion = torch.nn.BCELoss(reduction='sum')
-    for _ in range(100):
+    for _ in range(10):
         total_train_loss = 0
         for d in tqdm(train_dataloader,desc='Training'):
             x = d['spectrogram']
@@ -110,3 +157,5 @@ if __name__=="__main__":
         print('Train Loss: %f \t Val Loss: %f' % 
                 (total_train_loss,total_val_loss))
         save_checkpoint(checkpoint_file_name,net,optimizer)
+
+    output = to_midi(net,'/mnt/ppl-3/musicnet/musicnet/test_data/1759.wav')
