@@ -7,6 +7,7 @@ import csv
 import pickle
 from intervaltree import IntervalTree
 import scipy
+import pretty_midi
 
 def load_data(mem=False):
     file_name = config.MUSICNET_FILE
@@ -189,6 +190,18 @@ class IntervalsToNoteNumbers(object):
         output = sample.copy()
         output['note_numbers'] = note_numbers
         return output
+
+def interval_tree_to_midi(interval_tree,rate=44100):
+    midi = pretty_midi.PrettyMIDI()
+    cello_program = pretty_midi.instrument_name_to_program('Cello')
+    instrument = pretty_midi.Instrument(program=cello_program)
+    for interval in interval_tree.all_intervals:
+        start,end,(_,note,_,_,_) = interval
+        note = pretty_midi.Note(velocity=100, pitch=note,
+                start=start/rate, end=end/rate)
+        instrument.notes.append(note)
+    midi.instruments.append(instrument)
+    return midi
 
 if __name__=="__main__":
     from generator import Compose, NoteNumbersToVector, Spectrogram, ToTensor

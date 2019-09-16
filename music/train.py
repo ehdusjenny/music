@@ -161,7 +161,8 @@ if __name__=="__main__":
         save_checkpoint(checkpoint_file_name,net,optimizer)
 
     #midi = to_midi(net,os.path.join(musicnet_dir,'test_data','1759.wav'))
-    midi = to_midi(net,os.path.join(musicnet_dir,'train_data','1727.wav'))
+    #midi = to_midi(net,os.path.join(musicnet_dir,'train_data','1727.wav'))
+    midi = data.musicnet.interval_tree_to_midi(val_dataset.labels[1759])
     midi.write('output.mid')
     wav = midi.synthesize()
     scipy.io.wavfile.write('output.wav',rate=44100,data=wav)
