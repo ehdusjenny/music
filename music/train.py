@@ -22,7 +22,7 @@ class Net(torch.nn.Module):
     def forward(self,x):
         return self.seq(x).squeeze()
 
-def get_datasets():
+def get_datasets(dataset_dir='/mnt/ppl-3/musicnet/musicnet'):
     generated_transforms = data.generator.Compose([
         data.generator.ToNoteNumber(),
         data.generator.SynthesizeSounds(),
@@ -40,12 +40,13 @@ def get_datasets():
         data.generator.Filter(['note_numbers','spectrogram'])
     ])
     musicnet_train_dataset = data.musicnet.MusicNetDataset(
-            '/mnt/ppl-3/musicnet/musicnet',transforms=musicnet_transforms,
+            dataset_dir,transforms=musicnet_transforms,
             train=True,points_per_song=1)
     musicnet_test_dataset = data.musicnet.MusicNetDataset(
-            '/mnt/ppl-3/musicnet/musicnet',transforms=musicnet_transforms,
+            dataset_dir,transforms=musicnet_transforms,
             train=False,points_per_song=100)
     return musicnet_train_dataset, musicnet_test_dataset
+    #return generated_dataset, musicnet_test_dataset
 
 def save_checkpoint(file_name, model, optim):
     checkpoint = {
@@ -110,8 +111,9 @@ if __name__=="__main__":
     output_dir = ''
     best_model_file_name = os.path.join(output_dir,'best_model.pkl')
     checkpoint_file_name = os.path.join(output_dir,'checkpoint.pkl')
+    musicnet_dir = '/home/howard/Datasets/musicnet'
 
-    train_dataset, val_dataset = get_datasets()
+    train_dataset, val_dataset = get_datasets(musicnet_dir)
 
     net = Net()
     optimizer = torch.optim.Adam(net.parameters(), lr=0.01)
@@ -126,7 +128,7 @@ if __name__=="__main__":
     best_loss = float('inf')
 
     criterion = torch.nn.BCELoss(reduction='sum')
-    for _ in range(10):
+    for _ in range(2):
         total_train_loss = 0
         for d in tqdm(train_dataloader,desc='Training'):
             x = d['spectrogram']
@@ -158,4 +160,8 @@ if __name__=="__main__":
                 (total_train_loss,total_val_loss))
         save_checkpoint(checkpoint_file_name,net,optimizer)
 
-    output = to_midi(net,'/mnt/ppl-3/musicnet/musicnet/test_data/1759.wav')
+    #midi = to_midi(net,os.path.join(musicnet_dir,'test_data','1759.wav'))
+    midi = to_midi(net,os.path.join(musicnet_dir,'train_data','1727.wav'))
+    midi.write('output.mid')
+    wav = midi.synthesize()
+    scipy.io.wavfile.write('output.wav',rate=44100,data=wav)
