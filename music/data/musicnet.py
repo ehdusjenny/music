@@ -96,7 +96,7 @@ class Memoize(object):
 
 class MusicNetDataset(torch.utils.data.Dataset):
     def __init__(self, musicnet_dir, train=True, transforms=None,
-            points_per_song=1, window_size=10000):
+            points_per_song=1, window_size=400):
         self.transforms = transforms
         self.window_size = window_size
         self.points_per_song = points_per_song
