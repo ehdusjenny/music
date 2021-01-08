@@ -7,78 +7,8 @@ import csv
 import pickle
 from intervaltree import IntervalTree
 import scipy
+from scipy.io import wavfile
 import pretty_midi
-
-def load_data(mem=False):
-    file_name = config.MUSICNET_FILE
-    if mem:
-        return dict(np.load(open(file_name,'rb'),encoding='latin1'))
-    else:
-        return dict(np.load(open(file_name,'rb'),encoding='latin1',mmap_mode="r"))
-
-def split_input_output(data, input_dims=2048, sampling_rate=44100, stride=512, random=False):
-    # TODO: Does not currently work for different stride lengths
-    # TODO: Compute the number of data points using data['2382'][0].shape[0]
-    features = 0    # first element of (X,Y) data tuple
-    labels = 1      # second element of (X,Y) data tuple
-
-    ids = list(data.keys())
-    if random:
-        x = np.empty([len(data),input_dims])
-        y = np.zeros([len(data),128])
-        for i in range(len(ids)):
-            # Pick a random spot in the audio track
-            s = np.random.randint(
-                    input_dims/2,
-                    len(data[ids[i]][features])-input_dims/2)
-            x[i] = data[ids[i]][features][int(s-input_dims/2):int(s+input_dims/2)]
-            for label in data[ids[i]][labels][s]:
-                y[i,label.data[1]] = 1
-    else:
-        x = np.empty([len(data)*7500,input_dims])
-        y = np.zeros([len(data)*7500,128])
-        for i in range(len(ids)):
-            for j in range(7500):
-                index = sampling_rate+j*stride # start from one second to give us some wiggle room for larger segments
-                x[7500*i + j] = data[ids[i]][features][index:index+input_dims]
-                
-                # label stuff that's on in the center of the window
-                for label in data[ids[i]][labels][index+input_dims/2]:
-                    y[7500*i + j,label.data[1]] = 1
-
-    x = Variable(torch.from_numpy(x).float(), requires_grad=False)
-    y = Variable(torch.from_numpy(y).float(), requires_grad=False)
-
-    return x,y
-
-def get_random_batch(data, ids, input_dims=2048, sampling_rate=44100):
-    x = np.empty([len(data),input_dims])
-    y = np.zeros([len(data),128])
-    for i in range(len(ids)):
-        # Pick a random spot in the audio track
-        s = np.random.randint(
-                input_dims/2,
-                len(data.get(ids[i]).get("data"))-input_dims/2)
-        x[i] = data.get(ids[i]).get("data")[int(s-input_dims/2):int(s+input_dims/2)]
-        y[i] = np.unpackbits(data.get(ids[i]).get("labels")[s])
-    x = Variable(torch.from_numpy(x).float(), requires_grad=False).cuda()
-    y = Variable(torch.from_numpy(y).float(), requires_grad=False).cuda()
-    return x,y
-
-def get_test_set(data, ids, input_dims=2048, sampling_rate=44100):
-    stride = 512*8
-    x = np.empty([len(ids)*750,input_dims])
-    y = np.zeros([len(ids)*750,128])
-    for i in range(len(ids)):
-        for j in tqdm(range(750)):
-            index = sampling_rate+j*stride # start from one second to give us some wiggle room for larger segments
-            x[750*i + j] = data.get(ids[i]).get("data")[index:index+input_dims]
-            y[750*i + j] = np.unpackbits(data.get(ids[i]).get("labels")[index+input_dims/2])
-    x = Variable(torch.from_numpy(x).float(), requires_grad=False,
-            volatile=True).cuda()
-    y = Variable(torch.from_numpy(y).float(), requires_grad=False,
-            volatile=True).cuda()
-    return x,y
 
 class Memoize(object):
     def __init__(self, file_name, func):
@@ -94,12 +24,14 @@ class Memoize(object):
                 pickle.dump(val,f)
             return val
 
+##################################################
+# Dataset
+##################################################
+
 class MusicNetDataset(torch.utils.data.Dataset):
     def __init__(self, musicnet_dir, train=True, transforms=None,
-            points_per_song=1, window_size=400):
+            window_size=400):
         self.transforms = transforms
-        self.window_size = window_size
-        self.points_per_song = points_per_song
         url = 'https://homes.cs.washington.edu/~thickstn/media/musicnet.tar.gz'
         if train:
             self.labels_dir = os.path.join(musicnet_dir,'train_labels')
@@ -118,24 +50,18 @@ class MusicNetDataset(torch.utils.data.Dataset):
 
         self.labels = labels.get()
         self.keys = list(self.labels.keys())
-        self.data = []
-        for k,l in self.labels.items():
-            length = l.end()
-            # TODO: Compute indices for the n equidistant points
-            # Divide song into n+1 equal parts
-            # Each part is length/(n+1) in size
-            d = int(length/(points_per_song+1))
-            for i in range(d,length,d):
-                self.data.append((k,i))
+        self.data = list(self.labels.keys())
 
     def __getitem__(self,index):
-        k,t = self.data[index]
-        wav_file_name = os.path.join(self.data_dir,'%d.wav'%k)
-        rate,data = scipy.io.wavfile.read(wav_file_name)
-        start = t-int(self.window_size/2)
-        end = start+self.window_size
-        data = data[start:end]
-        output = {'intervals': self.labels[k][t], 'audio': data}
+        #k,t = self.data[index]
+        index = self.data[index]
+        wav_file_name = os.path.join(self.data_dir,'%d.wav'%index)
+        rate,data = wavfile.read(wav_file_name)
+        #start = t-int(self.window_size/2)
+        #end = start+self.window_size
+        #data = data[start:end]
+        #output = {'intervals': self.labels[k][t], 'audio': data}
+        output = {'interval_tree': self.labels[index], 'audio': data}
         if self.transforms is not None:
             return self.transforms(output)
         return output
@@ -163,7 +89,40 @@ class MusicNetDataset(torch.utils.data.Dataset):
             trees[uid] = tree
         return trees
 
-class RandomWindow(object):
+class DiscretizedMusicNetDataset(MusicNetDataset):
+    def __init__(self, musicnet_dir, train=True, transforms=None,
+            window_size=400, points_per_song=10):
+        super().__init__(musicnet_dir=musicnet_dir, train=train, transforms=transforms)
+        self.window_size = window_size
+
+        data = []
+        for k,l in self.labels.items():
+            length = l.end()
+            # TODO: Compute indices for the n equidistant points
+            # Divide song into n+1 equal parts
+            # Each part is length/(n+1) in size
+            d = int(length/(points_per_song+1))
+            for i in range(d,length,d):
+                data.append((k,i))
+        self.data = data
+
+    def __getitem__(self,index):
+        k,t = self.data[index]
+        wav_file_name = os.path.join(self.data_dir,'%d.wav'%k)
+        rate,data = wavfile.read(wav_file_name)
+        start = t-int(self.window_size/2)
+        end = start+self.window_size
+        data = data[start:end]
+        output = {'intervals': self.labels[k][t], 'audio': data}
+        if self.transforms is not None:
+            return self.transforms(output)
+        return output
+
+##################################################
+# Transforms
+##################################################
+
+class RandomCrop(object):
     def __init__(self, window_size=10000):
         self.window_size = window_size
     def __call__(self,sample):
@@ -174,7 +133,7 @@ class RandomWindow(object):
         start = np.random.randint(0,length-self.window_size)
         end = start+self.window_size
 
-        intervals = interval_tree[int((start+end)/2)]
+        intervals = interval_tree[(start+end)//2]
         audio = audio[start:end]
 
         return {'intervals': intervals, 'audio': audio}
@@ -206,11 +165,11 @@ def interval_tree_to_midi(interval_tree,rate=44100):
 if __name__=="__main__":
     from generator import Compose, NoteNumbersToVector, Spectrogram, ToTensor
     transforms = Compose([
-        #RandomWindow(),
+        RandomCrop(),
         IntervalsToNoteNumbers(),
         NoteNumbersToVector(),
         ToTensor(),
         Spectrogram()
     ])
-    dataset = MusicNetDataset('/mnt/ppl-3/musicnet/musicnet',
+    dataset = MusicNetDataset('/home/howard/Datasets/musicnet',
             train=False,transforms=transforms)

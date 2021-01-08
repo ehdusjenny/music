@@ -3,7 +3,6 @@ import pretty_midi
 import pickle
 import os
 import itertools
-import librosa
 from random import randint
 from tqdm import tqdm
 
@@ -80,7 +79,7 @@ class SynthesizeSounds(object):
                 note = pretty_midi.Note(velocity=self.velocity, pitch=note_number, start=0, end=1)
                 instrument.notes.append(note)
             chord.instruments.append(instrument)
-            audio_data = chord.synthesize(fs=self.sampling_rate)
+            audio_data = chord.fluidsynth(fs=self.sampling_rate)
 
         output = sample.copy()
         output['audio'] = audio_data[:self.sample_length] # Last second is empty
@@ -177,7 +176,8 @@ if __name__=="__main__":
         Spectrogram()
     ])
     dataset = GeneratedDataset(transforms=transforms)
-    d = dataset[int(len(dataset)/2)]
+    #d = dataset[int(len(dataset)/2)]
+    d = dataset[randint(0,len(dataset))]
     print(d['spectrogram'].shape)
 
     import scipy.io.wavfile
