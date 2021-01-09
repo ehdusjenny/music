@@ -53,14 +53,9 @@ class MusicNetDataset(torch.utils.data.Dataset):
         self.data = list(self.labels.keys())
 
     def __getitem__(self,index):
-        #k,t = self.data[index]
         index = self.data[index]
         wav_file_name = os.path.join(self.data_dir,'%d.wav'%index)
         rate,data = wavfile.read(wav_file_name)
-        #start = t-int(self.window_size/2)
-        #end = start+self.window_size
-        #data = data[start:end]
-        #output = {'intervals': self.labels[k][t], 'audio': data}
         output = {'interval_tree': self.labels[index], 'audio': data}
         if self.transforms is not None:
             return self.transforms(output)
@@ -91,29 +86,42 @@ class MusicNetDataset(torch.utils.data.Dataset):
 
 class DiscretizedMusicNetDataset(MusicNetDataset):
     def __init__(self, musicnet_dir, train=True, transforms=None,
-            window_size=400, points_per_song=10):
+            min_window_size=2048, overlap=2048, points_per_song=10):
         super().__init__(musicnet_dir=musicnet_dir, train=train, transforms=transforms)
-        self.window_size = window_size
+
+        """
+         window 1   window 2     window 3
+        |--------------|        |--------------|
+                    |--------------|
+                    |..|        |..|
+                     overlap 1   overlap 2
+        - There are `points_per_song-1` overlapping regions
+            - i.e. Overlaps account for `overlap*(points_per_song-1)` points
+        - The remaining regions are split evenly between `points_per_song` windows
+            - i.e. `(L-overlap*(points_per_song-1))/points_per_song`
+        - window size = (L-overlap*(points_per_song-1))/points_per_song
+        - stride = window size - overlap
+        """
 
         data = []
         for k,l in self.labels.items():
             length = l.end()
-            # TODO: Compute indices for the n equidistant points
-            # Divide song into n+1 equal parts
-            # Each part is length/(n+1) in size
-            d = int(length/(points_per_song+1))
-            for i in range(d,length,d):
-                data.append((k,i))
+            window_size = (length-overlap*(points_per_song-1))//points_per_song
+            stride = window_size-overlap
+            for i in range(points_per_song):
+                data.append((k,i*stride,i*stride+window_size))
         self.data = data
 
     def __getitem__(self,index):
-        k,t = self.data[index]
-        wav_file_name = os.path.join(self.data_dir,'%d.wav'%k)
+        song_id,start,end = self.data[index]
+        wav_file_name = os.path.join(self.data_dir,'%d.wav'%song_id)
         rate,data = wavfile.read(wav_file_name)
-        start = t-int(self.window_size/2)
-        end = start+self.window_size
-        data = data[start:end]
-        output = {'intervals': self.labels[k][t], 'audio': data}
+        output = {
+                'interval_tree': self.labels[song_id],
+                'audio': data,
+                'start': start,
+                'end': end
+        }
         if self.transforms is not None:
             return self.transforms(output)
         return output
@@ -128,9 +136,29 @@ class RandomCrop(object):
     def __call__(self,sample):
         interval_tree = sample['interval_tree']
         audio = sample['audio']
+        start = sample.pop('start',0)
+        end = sample.pop('end',len(audio))
 
-        length = interval_tree.end()
-        start = np.random.randint(0,length-self.window_size)
+        length = end-start
+        start = start+np.random.randint(0,length-self.window_size)
+        end = start+self.window_size
+
+        intervals = interval_tree[(start+end)//2]
+        audio = audio[start:end]
+
+        return {'intervals': intervals, 'audio': audio}
+
+class CentreCrop(object):
+    def __init__(self, window_size=10000):
+        self.window_size = window_size
+    def __call__(self,sample):
+        interval_tree = sample['interval_tree']
+        audio = sample['audio']
+        start = sample.pop('start',0)
+        end = sample.pop('end',len(audio))
+
+        length = end-start
+        start = start+(length+self.window_size)//2
         end = start+self.window_size
 
         intervals = interval_tree[(start+end)//2]

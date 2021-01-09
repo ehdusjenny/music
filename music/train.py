@@ -77,28 +77,8 @@ def get_datasets(dataset_dir='/mnt/ppl-3/musicnet/musicnet', window_size=2048):
     #generated_dataset = data.generator.GeneratedDataset(transforms=generated_transforms)
 
     # Training set
-    #musicnet_transforms = data.generator.Compose([
-    #    data.musicnet.RandomCrop(window_size),
-    #    data.musicnet.IntervalsToNoteNumbers(),
-    #    data.generator.NoteNumbersToVector(),
-    #    data.generator.ToTensor(),
-    #    data.generator.Filter(['note_numbers','audio'])
-    #])
-    #musicnet_train_dataset = data.musicnet.MusicNetDataset(
-    #        dataset_dir,transforms=musicnet_transforms,
-    #        train=True)
-
-    #musicnet_transforms = data.generator.Compose([
-    #    data.musicnet.IntervalsToNoteNumbers(),
-    #    data.generator.NoteNumbersToVector(),
-    #    data.generator.ToTensor(),
-    #    data.generator.Filter(['note_numbers','audio'])
-    #])
-    #musicnet_train_dataset = data.musicnet.DiscretizedMusicNetDataset(
-    #        dataset_dir,transforms=musicnet_transforms,
-    #        train=True, window_size=window_size, points_per_song=10)
-
     musicnet_transforms = data.generator.Compose([
+        data.musicnet.RandomCrop(window_size),
         data.musicnet.IntervalsToNoteNumbers(),
         data.generator.NoteNumbersToVector(),
         data.generator.ToTensor(),
@@ -106,10 +86,11 @@ def get_datasets(dataset_dir='/mnt/ppl-3/musicnet/musicnet', window_size=2048):
     ])
     musicnet_train_dataset = data.musicnet.DiscretizedMusicNetDataset(
             dataset_dir,transforms=musicnet_transforms,
-            train=False, window_size=window_size, points_per_song=1000)
+            train=True, min_window_size=window_size, points_per_song=1000, overlap=2048)
 
     # Validation set
     musicnet_transforms_val = data.generator.Compose([
+        data.musicnet.CentreCrop(window_size),
         data.musicnet.IntervalsToNoteNumbers(),
         data.generator.NoteNumbersToVector(),
         data.generator.ToTensor(),
@@ -117,7 +98,7 @@ def get_datasets(dataset_dir='/mnt/ppl-3/musicnet/musicnet', window_size=2048):
     ])
     musicnet_val_dataset = data.musicnet.DiscretizedMusicNetDataset(
             dataset_dir,transforms=musicnet_transforms_val,
-            train=False, window_size=window_size, points_per_song=10)
+            train=False, min_window_size=window_size, points_per_song=10)
 
     return musicnet_train_dataset, musicnet_val_dataset
     #return generated_dataset, musicnet_test_dataset
