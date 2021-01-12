@@ -108,6 +108,9 @@ class DiscretizedMusicNetDataset(MusicNetDataset):
             length = l.end()
             window_size = (length-overlap*(points_per_song-1))//points_per_song
             stride = window_size-overlap
+            if window_size < min_window_size:
+                window_size = min_window_size
+                stride = (window_size*points_per_song-length)//points_per_song
             for i in range(points_per_song):
                 data.append((k,i*stride,i*stride+window_size))
         self.data = data
@@ -140,13 +143,16 @@ class RandomCrop(object):
         end = sample.pop('end',len(audio))
 
         length = end-start
-        start = start+np.random.randint(0,length-self.window_size)
+        start = start+np.random.randint(0,length-self.window_size+1)
         end = start+self.window_size
 
         intervals = interval_tree[(start+end)//2]
         audio = audio[start:end]
 
-        return {'intervals': intervals, 'audio': audio}
+        return {
+                **sample,
+                'intervals': intervals, 'audio': audio, 'start': start, 'end': end
+        }
 
 class CentreCrop(object):
     def __init__(self, window_size=10000):
@@ -164,18 +170,66 @@ class CentreCrop(object):
         intervals = interval_tree[(start+end)//2]
         audio = audio[start:end]
 
-        return {'intervals': intervals, 'audio': audio}
+        return {
+                **sample,
+                'intervals': intervals, 'audio': audio, 'start': start, 'end': end
+        }
+
+class CropIntervals(object):
+    def __init__(self, window_size, stride):
+        self.window_size = window_size
+        self.stride = stride
+    def __call__(self,sample):
+        interval_tree = sample['interval_tree']
+        start = sample.pop('start')
+        end = sample.pop('end')
+
+        intervals = []
+        window_start = start
+        while window_start+self.window_size <= end:
+            intervals.append(interval_tree[window_start+self.window_size//2])
+            window_start += self.stride
+
+        return {
+            **sample,
+            'intervals': intervals
+        }
 
 class IntervalsToNoteNumbers(object):
     def __call__(self,sample):
         intervals = sample['intervals']
 
-        note_numbers = []
-        for (start,end,(instrument,note,measure,beat,note_value)) in intervals:
-            note_numbers.append(note)
+        if type(intervals) is list:
+            note_numbers = []
+            for i in intervals:
+                note_numbers.append([])
+                for (start,end,(instrument,note,measure,beat,note_value)) in i:
+                    note_numbers[-1].append(note)
+        else: # if type(intervals) is set
+            note_numbers = []
+            for (start,end,(instrument,note,measure,beat,note_value)) in intervals:
+                note_numbers.append(note)
 
         output = sample.copy()
         output['note_numbers'] = note_numbers
+        return output
+
+class NoteNumbersToVector(object):
+    def __call__(self, sample):
+        note_numbers = sample['note_numbers']
+        assert type(note_numbers) is list
+
+        def convert(note_numbers):
+            vector = torch.zeros([128])
+            for n in note_numbers:
+                vector[n] = 1
+            return vector
+
+        output = sample.copy()
+        if len(note_numbers) > 0 and type(note_numbers[0]) is list:
+            output['note_numbers'] = torch.stack([convert(n) for n in note_numbers])
+        else:
+            output['note_numbers'] = convert(note_numbers)
         return output
 
 def interval_tree_to_midi(interval_tree,rate=44100):

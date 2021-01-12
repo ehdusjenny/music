@@ -65,6 +65,51 @@ class ConvNet(torch.nn.Module):
         x = x.unsqueeze(1)
         return self.seq(x).squeeze()
 
+class RecurrentUnit(torch.nn.Module):
+    def __init__(self, input_size, output_size, hidden_size):
+        super().__init__()
+        #self.gru = torch.nn.GRUCell(input_size=input_size,hidden_size=hidden_size)
+        self.fc_output = torch.nn.Linear(in_features=input_size+hidden_size,out_features=output_size),
+        self.fc_hidden = torch.nn.Linear(in_features=input_size+hidden_size,out_features=hidden_size),
+    def forward(self, x, h):
+        cat_input = torch.cat([x,h],1)
+        #x = self.gru(x,h)
+        return x,x
+
+class GRUNet(torch.nn.Module):
+    def __init__(self, input_size=2048):
+        super().__init__()
+        self.input_size = input_size
+        self.seq = torch.nn.Sequential(
+                torch.nn.Linear(in_features=input_size,out_features=1024),
+                torch.nn.ReLU(),
+                torch.nn.Linear(in_features=1024,out_features=512),
+                torch.nn.ReLU(),
+        )
+        #self.gru = torch.nn.GRUCell(input_size=512,hidden_size=512)
+        self.gru = RecurrentUnit(input_size=512,hidden_size=512,output_size=512)
+        self.seq2 = torch.nn.Sequential(
+                torch.nn.ReLU(),
+                torch.nn.Linear(in_features=512,out_features=128),
+        )
+    def forward(self, x, stride):
+        batch_size = x.shape[0]
+        hidden = self.init_hidden(batch_size)
+        length = x.shape[1]
+        outputs = []
+        for i in range((length-self.input_size)//stride+1):
+            left = i*stride
+            right = left+self.input_size
+
+            # Pass through neural network
+            o = self.seq(x[:,left:right])
+            o,hidden = self.gru(o,hidden)
+            o = self.seq2(o)
+            outputs.append(o)
+        return torch.stack(outputs,1) # batch size, seq len, features
+    def init_hidden(self, batch_size):
+        return -10*torch.ones([batch_size, 512])
+
 def get_datasets(dataset_dir='/mnt/ppl-3/musicnet/musicnet', window_size=2048):
     #generated_transforms = data.generator.Compose([
     #    data.generator.ToNoteNumber(),
@@ -99,6 +144,36 @@ def get_datasets(dataset_dir='/mnt/ppl-3/musicnet/musicnet', window_size=2048):
     musicnet_val_dataset = data.musicnet.DiscretizedMusicNetDataset(
             dataset_dir,transforms=musicnet_transforms_val,
             train=False, min_window_size=window_size, points_per_song=10)
+
+    return musicnet_train_dataset, musicnet_val_dataset
+    #return generated_dataset, musicnet_test_dataset
+
+def get_datasets_recurrent(dataset_dir='/mnt/ppl-3/musicnet/musicnet', window_size=2048, seq_len=5, stride=1024):
+    # Training set
+    musicnet_transforms = data.generator.Compose([
+        data.musicnet.RandomCrop(window_size+stride*(seq_len-1)),
+        data.musicnet.CropIntervals(window_size,stride),
+        data.musicnet.IntervalsToNoteNumbers(),
+        data.musicnet.NoteNumbersToVector(),
+        data.generator.ToTensor(),
+        data.generator.Filter(['note_numbers','audio'])
+    ])
+    musicnet_train_dataset = data.musicnet.DiscretizedMusicNetDataset(
+            dataset_dir,transforms=musicnet_transforms,
+            train=True, min_window_size=window_size+stride*(seq_len-1), points_per_song=256, overlap=2048)
+
+    # Validation set
+    musicnet_transforms_val = data.generator.Compose([
+        data.musicnet.CentreCrop(window_size+stride*(seq_len-1)),
+        data.musicnet.CropIntervals(window_size,stride),
+        data.musicnet.IntervalsToNoteNumbers(),
+        data.musicnet.NoteNumbersToVector(),
+        data.generator.ToTensor(),
+        data.generator.Filter(['note_numbers','audio'])
+    ])
+    musicnet_val_dataset = data.musicnet.DiscretizedMusicNetDataset(
+            dataset_dir,transforms=musicnet_transforms_val,
+            train=False, min_window_size=window_size+stride*(seq_len-1), points_per_song=16)
 
     return musicnet_train_dataset, musicnet_val_dataset
     #return generated_dataset, musicnet_test_dataset
@@ -188,29 +263,30 @@ def to_midi2(convert,wav_file_name,win_length=400,hop_length=None):
     instrument = pretty_midi.Instrument(program=cello_program)
 
     # Convert prediction to MIDI
-    notes = [None]*128
-    for t,p in tqdm(enumerate(predictions), desc='Converting to MIDI', total=len(slices)):
-        for n in range(128):
-            if p[n]:
-                if notes[n] is None:
-                    notes[n] = (t,t+1)
-                else:
-                    start,end = notes[n]
-                    notes[n] = (start,end+1)
-            else:
-                if notes[n] is None:
-                    continue
-                else:
-                    start,end = notes[n]
-                    start = (win_length/2+start*hop_length)/rate
-                    end = (win_length/2+end*hop_length)/rate
-                    notes[n] = None
-                    #tqdm.write('Note %d played from %f to %f.' % (n,start,end))
-                    note = pretty_midi.Note(velocity=100, pitch=n,
-                            start=start, end=end)
-                    instrument.notes.append(note)
-    midi.instruments.append(instrument)
-    return midi
+    return notes_to_midi(predictions)
+    #notes = [None]*128
+    #for t,p in tqdm(enumerate(predictions), desc='Converting to MIDI', total=len(slices)):
+    #    for n in range(128):
+    #        if p[n]:
+    #            if notes[n] is None:
+    #                notes[n] = (t,t+1)
+    #            else:
+    #                start,end = notes[n]
+    #                notes[n] = (start,end+1)
+    #        else:
+    #            if notes[n] is None:
+    #                continue
+    #            else:
+    #                start,end = notes[n]
+    #                start = (win_length/2+start*hop_length)/rate
+    #                end = (win_length/2+end*hop_length)/rate
+    #                notes[n] = None
+    #                #tqdm.write('Note %d played from %f to %f.' % (n,start,end))
+    #                note = pretty_midi.Note(velocity=100, pitch=n,
+    #                        start=start, end=end)
+    #                instrument.notes.append(note)
+    #midi.instruments.append(instrument)
+    #return midi
 
 def get_convert_fn(net,n_fft=400,threshold=0.7):
     def convert(data):
@@ -243,6 +319,44 @@ def get_convert_fn_ground_truth(full_data,interval_tree):
         return output
     return convert
 
+def notes_to_midi(notes, win_length, hop_length, rate):
+    """
+    Convert a tensor of notes into a MIDI object.
+
+    Args:
+        notes: A boolean tensor of size (song length, 128).
+    """
+
+    # Create MIDI
+    midi = pretty_midi.PrettyMIDI()
+    cello_program = pretty_midi.instrument_name_to_program('Cello')
+    instrument = pretty_midi.Instrument(program=cello_program)
+
+    # Convert prediction to MIDI
+    last_notes = [None]*128
+    for t,p in tqdm(enumerate(notes), desc='Converting to MIDI', total=notes.shape[0]):
+        for n in range(128):
+            if p[n]:
+                if last_notes[n] is None:
+                    last_notes[n] = (t,t+1)
+                else:
+                    start,end = last_notes[n]
+                    last_notes[n] = (start,end+1)
+            else:
+                if last_notes[n] is None:
+                    continue
+                else:
+                    start,end = last_notes[n]
+                    start = (win_length/2+start*hop_length)/rate
+                    end = (win_length/2+end*hop_length)/rate
+                    last_notes[n] = None
+                    # Create and add MIDI note
+                    note = pretty_midi.Note(velocity=100, pitch=n,
+                            start=start, end=end)
+                    instrument.notes.append(note)
+    midi.instruments.append(instrument)
+    return midi
+
 ##################################################
 # Experiment
 ##################################################
@@ -273,12 +387,6 @@ class MusicNetExperiment(Experiment):
 
         batch_size = config.pop('batch_size',64)
         train_dataset, val_dataset = get_datasets(musicnet_dir)
-        #train_sampler = torch.utils.data.RandomSampler(train_dataset,replacement=True,num_samples=batch_size)
-        #val_sampler = torch.utils.data.RandomSampler(val_dataset,replacement=False)
-        #self.train_dataloader = torch.utils.data.DataLoader(
-        #        dataset=train_dataset, sampler=train_sampler, batch_size=batch_size)
-        #self.val_dataloader = torch.utils.data.DataLoader(
-        #        dataset=val_dataset, sampler=val_sampler, batch_size=batch_size, shuffle=False)
         self.train_dataloader = torch.utils.data.DataLoader(
                 dataset=train_dataset, batch_size=batch_size, shuffle=True)
         self.val_dataloader = torch.utils.data.DataLoader(
@@ -364,6 +472,128 @@ class MusicNetExperiment(Experiment):
         plt.savefig(plot_filename)
         print('Saved plot at %s' % plot_filename)
 
+class MusicNetExperimentRNN(Experiment):
+    def setup(self, config):
+        output_dir = config.pop('output_dir','./output')
+        self.output_dir = output_dir
+        musicnet_dir = config.pop('musicnet_dir','/home/howard/Datasets/musicnet')
+        self.best_model_file_name = os.path.join(output_dir,'best_model.pkl')
+        self.checkpoint_file_name = os.path.join(output_dir,'checkpoint.pkl')
+        learning_rate = config.pop('learning_rate',0.01)
+
+        window_size = config.pop('window_size',2048)
+        seq_len = config.pop('seq_len',10)
+        self.stride = config.pop('stride',1024)
+
+        if not os.path.isdir(output_dir):
+            print('%s does not exist. Creating directory.' % output_dir)
+            os.mkdir(output_dir)
+
+        self.net = GRUNet(window_size)
+
+        self.optimizer = torch.optim.Adam(self.net.parameters(), lr=learning_rate)
+        self.state['loss_history'] = {
+                'validation': [],
+                'train': [],
+                'iteration': [],
+        }
+
+        batch_size = config.pop('batch_size',64)
+        train_dataset, val_dataset = get_datasets_recurrent(musicnet_dir, window_size=window_size, seq_len=seq_len,stride=self.stride)
+        self.train_dataloader = torch.utils.data.DataLoader(
+                dataset=train_dataset, batch_size=batch_size, shuffle=True)
+        self.val_dataloader = torch.utils.data.DataLoader(
+                dataset=val_dataset, batch_size=batch_size, shuffle=False)
+
+        self.state['best_model_train'] = copy.deepcopy(self.net)
+        self.state['best_loss_train'] = float('inf')
+        self.state['best_model_val'] = copy.deepcopy(self.net)
+        self.state['best_loss_val'] = float('inf')
+
+        self.criterion = torch.nn.BCEWithLogitsLoss(reduction='mean')
+
+    def run_step(self,iteration):
+        criterion = self.criterion
+        net = self.net
+        optimizer = self.optimizer
+
+        total_val_loss = []
+        for d in tqdm(self.val_dataloader,desc='Validation'):
+            x = d['audio']
+            y = d['note_numbers']
+            est = net(x,self.stride)
+
+            #pos_weight = torch.tensor([(torch.ones_like(y).sum()-y.sum())/y.sum()])
+            #criterion = torch.nn.BCEWithLogitsLoss(pos_weight=pos_weight)
+            #criterion = torch.nn.CrossEntropyLoss(weight=pos_weight)
+            loss = criterion(est,y)
+            total_val_loss.append(loss.item())
+        total_val_loss = np.mean(total_val_loss)
+        val_pred_mean = ((torch.sigmoid(est)>0.5)+0.).mean()
+
+        total_train_loss = []
+        for d in tqdm(self.train_dataloader,desc='Training'):
+            x = d['audio']
+            y = d['note_numbers']
+            est = net(x, self.stride)
+
+            #pos_weight = torch.tensor([(torch.ones_like(y).sum()-y.sum())/y.sum()])
+            #criterion = torch.nn.BCEWithLogitsLoss(pos_weight=pos_weight)
+            #criterion = torch.nn.CrossEntropyLoss(weight=pos_weight)
+            loss = criterion(est,y)
+            total_train_loss.append(loss.item())
+
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+        total_train_loss = np.mean(total_train_loss)
+
+        if total_train_loss < self.state['best_loss_train']:
+            print('New best model saved.')
+            self.state['best_model_train'] = copy.deepcopy(self.net)
+            self.state['best_loss_train'] = total_train_loss
+            best_model_path = os.path.join(self.directory, 'best_model_train.pt')
+            torch.save(self.net.state_dict(), best_model_path)
+
+        if total_val_loss < self.state['best_loss_val']:
+            print('New best model saved.')
+            self.state['best_model_val'] = copy.deepcopy(self.net)
+            self.state['best_loss_val'] = total_val_loss
+            best_model_path = os.path.join(self.directory, 'best_model_val.pt')
+            torch.save(self.net.state_dict(), best_model_path)
+
+        self.state['loss_history']['train'].append(total_train_loss)
+        self.state['loss_history']['validation'].append(total_val_loss)
+        self.state['loss_history']['iteration'].append(iteration)
+        print('%d\t Train Loss: %f \t Val Loss: %f\t%f' % 
+                (iteration,total_train_loss,total_val_loss,val_pred_mean))
+
+    def after_epoch(self, iteration):
+        loss_history = self.state['loss_history']
+        output_dir = self.output_dir
+
+        plt.figure()
+        plt.plot(loss_history['iteration'],loss_history['train'],label='train')
+        plt.plot(loss_history['iteration'],loss_history['validation'],label='validation')
+        plt.xlabel('Training Iterations')
+        plt.ylabel('Loss')
+        plt.legend(loc='best')
+        plt.grid()
+        plot_filename = os.path.join(output_dir, 'plot.png')
+        plt.savefig(plot_filename)
+        print('Saved plot at %s' % plot_filename)
+
+        plt.figure()
+        plt.plot(loss_history['iteration'],[np.log(y) for y in loss_history['train']],label='train')
+        plt.plot(loss_history['iteration'],[np.log(y) for y in loss_history['validation']],label='validation')
+        plt.xlabel('Training Iterations')
+        plt.ylabel('Log Loss')
+        plt.legend(loc='best')
+        plt.grid()
+        plot_filename = os.path.join(output_dir, 'log-plot.png')
+        plt.savefig(plot_filename)
+        print('Saved plot at %s' % plot_filename)
+
 ##################################################
 # Evaluation
 ##################################################
@@ -387,13 +617,27 @@ def train(output_dir='./output', best_model_file_name=None,
     exp.run()
 
 @app.command()
+def train_rnn(output_dir='./output', best_model_file_name=None,
+        checkpoint_file_name=None, musicnet_dir=None):
+    config = {
+        'batch_size': 64
+    }
+    exp = MusicNetExperimentRNN(
+            epoch=5,
+            checkpoint_frequency=10,
+            directory=output_dir,
+            config=config
+    )
+    exp.run()
+
+@app.command()
 def foo(checkpoint_path, name=1727):
     with open(checkpoint_path,'rb') as f:
         checkpoint = dill.load(f)
     net = checkpoint['best_model']
 
 @app.command()
-def evaluate(checkpoint_path, audio_file_path, output_dir='./output', threshold=0.7):
+def convert(checkpoint_path, audio_file_path, output_dir='./output', threshold=0.7):
     with open(checkpoint_path,'rb') as f:
         checkpoint = dill.load(f)
     net = checkpoint['best_model_train']
@@ -416,6 +660,51 @@ def evaluate(checkpoint_path, audio_file_path, output_dir='./output', threshold=
     wav = midi.fluidsynth()
     wav_file_name = os.path.join(output_dir, 'output.wav')
     scipy.io.wavfile.write(wav_file_name,rate=44100,data=wav)
+
+@app.command()
+def convert_rnn(checkpoint_path, audio_file_path, output_dir='./output', threshold=0.5):
+    with open(checkpoint_path,'rb') as f:
+        checkpoint = dill.load(f)
+    net = checkpoint['best_model_train']
+    rate,data = scipy.io.wavfile.read(audio_file_path)
+    data = torch.tensor(data).unsqueeze(0)
+    notes = torch.sigmoid(net(data,1024)) > threshold
+    notes = notes.squeeze()
+
+    # Output MIDI
+    midi = notes_to_midi(notes, win_length=2048, hop_length=1024, rate=rate)
+    midi_file_name = os.path.join(output_dir, 'output.mid')
+    midi.write(midi_file_name)
+
+    # Output synthesized MIDI as wav file
+    wav = midi.fluidsynth()
+    wav_file_name = os.path.join(output_dir, 'output.wav')
+    scipy.io.wavfile.write(wav_file_name,rate=44100,data=wav)
+
+@app.command()
+def convert_ground_truth(output_dir='./output'):
+    musicnet_dir = '/home/howard/Datasets/musicnet'
+    window_size = 2048
+    seq_len = 1000
+    stride = 1024
+    rate = 44100
+    train_dataset, val_dataset = get_datasets_recurrent(musicnet_dir, window_size=window_size, seq_len=seq_len,stride=stride)
+
+    x = val_dataset[0]
+    notes = x['note_numbers']
+
+    # Output MIDI
+    midi = notes_to_midi(notes, win_length=2048, hop_length=1024, rate=rate)
+    midi_file_name = os.path.join(output_dir, 'output.mid')
+    midi.write(midi_file_name)
+
+    # Output synthesized MIDI as wav file
+    wav = midi.fluidsynth()
+    wav_file_name = os.path.join(output_dir, 'output.wav')
+    scipy.io.wavfile.write(wav_file_name,rate=44100,data=wav)
+
+    wav_file_name = os.path.join(output_dir, 'output2.wav')
+    scipy.io.wavfile.write(wav_file_name,rate=44100,data=x['audio'].numpy())
 
 if __name__=="__main__":
     app()
