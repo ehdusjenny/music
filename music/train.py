@@ -164,7 +164,8 @@ def get_datasets_recurrent(dataset_dir='/mnt/ppl-3/musicnet/musicnet', window_si
 
     # Validation set
     musicnet_transforms_val = data.generator.Compose([
-        data.musicnet.CentreCrop(window_size+stride*(seq_len-1)),
+        #data.musicnet.CentreCrop(window_size+stride*(seq_len-1)),
+        data.musicnet.CropAudio(),
         data.musicnet.CropIntervals(window_size,stride),
         data.musicnet.IntervalsToNoteNumbers(),
         data.musicnet.NoteNumbersToVector(),
@@ -173,7 +174,7 @@ def get_datasets_recurrent(dataset_dir='/mnt/ppl-3/musicnet/musicnet', window_si
     ])
     musicnet_val_dataset = data.musicnet.DiscretizedMusicNetDataset(
             dataset_dir,transforms=musicnet_transforms_val,
-            train=False, min_window_size=window_size+stride*(seq_len-1), points_per_song=16)
+            train=False, min_window_size=window_size, points_per_song=1)
 
     return musicnet_train_dataset, musicnet_val_dataset
     #return generated_dataset, musicnet_test_dataset
@@ -523,9 +524,6 @@ class MusicNetExperimentRNN(Experiment):
             y = d['note_numbers']
             est = net(x,self.stride)
 
-            #pos_weight = torch.tensor([(torch.ones_like(y).sum()-y.sum())/y.sum()])
-            #criterion = torch.nn.BCEWithLogitsLoss(pos_weight=pos_weight)
-            #criterion = torch.nn.CrossEntropyLoss(weight=pos_weight)
             loss = criterion(est,y)
             total_val_loss.append(loss.item())
         total_val_loss = np.mean(total_val_loss)
@@ -537,9 +535,6 @@ class MusicNetExperimentRNN(Experiment):
             y = d['note_numbers']
             est = net(x, self.stride)
 
-            #pos_weight = torch.tensor([(torch.ones_like(y).sum()-y.sum())/y.sum()])
-            #criterion = torch.nn.BCEWithLogitsLoss(pos_weight=pos_weight)
-            #criterion = torch.nn.CrossEntropyLoss(weight=pos_weight)
             loss = criterion(est,y)
             total_train_loss.append(loss.item())
 

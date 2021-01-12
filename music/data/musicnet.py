@@ -139,8 +139,8 @@ class RandomCrop(object):
     def __call__(self,sample):
         interval_tree = sample['interval_tree']
         audio = sample['audio']
-        start = sample.pop('start',0)
-        end = sample.pop('end',len(audio))
+        start = sample.get('start',0)
+        end = sample.get('end',len(audio))
 
         length = end-start
         start = start+np.random.randint(0,length-self.window_size+1)
@@ -160,8 +160,8 @@ class CentreCrop(object):
     def __call__(self,sample):
         interval_tree = sample['interval_tree']
         audio = sample['audio']
-        start = sample.pop('start',0)
-        end = sample.pop('end',len(audio))
+        start = sample.get('start',0)
+        end = sample.get('end',len(audio))
 
         length = end-start
         start = start+(length+self.window_size)//2
@@ -175,14 +175,25 @@ class CentreCrop(object):
                 'intervals': intervals, 'audio': audio, 'start': start, 'end': end
         }
 
+class CropAudio(object):
+    def __call__(self,sample):
+        audio = sample.get('audio')
+        start = sample.get('start')
+        end = sample.get('end')
+
+        return {
+            **sample,
+            'audio': audio[start:end]
+        }
+
 class CropIntervals(object):
     def __init__(self, window_size, stride):
         self.window_size = window_size
         self.stride = stride
     def __call__(self,sample):
         interval_tree = sample['interval_tree']
-        start = sample.pop('start')
-        end = sample.pop('end')
+        start = sample.get('start')
+        end = sample.get('end')
 
         intervals = []
         window_start = start
