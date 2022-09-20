@@ -22,4 +22,4 @@ torchaudio==0.7.2
 tqdm==4.55.1
 typer==0.3.2
 typing-extensions==3.7.4.3
-urllib3==1.26.2
+urllib3==1.26.5
